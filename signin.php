@@ -1,40 +1,39 @@
 <?php
 session_start();
-include("db.php"); // Make sure this file exists
+include("db.php");
 
-$error = ""; // initialize error message
+$error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $email = $_POST['email'];
     $password = $_POST['password'];
 
     // Fetch user by email
     $result = mysqli_query($conn, "SELECT * FROM users WHERE email='$email'");
-
+    
     if (mysqli_num_rows($result) == 1) {
         $user = mysqli_fetch_assoc($result);
-
-        // IMPORTANT: Since password is plain text, compare directly
-        if ($password === $user['password']) {
+        
+        // Check if password matches (plain text comparison)
+        if ($password == $user['password']) {
             // Set session variables
             $_SESSION['id'] = $user['id'];
             $_SESSION['fullname'] = $user['fullname'];
-            $_SESSION['email'] = $email;
             $_SESSION['role'] = $user['role'];
-
+            
             // Redirect based on role
             if ($user['role'] == 'admin') {
                 header("Location: admin-dashboard.php");
                 exit();
             } else {
-                header("Location: index.php");
+                header("Location: user-dashboard.php");
                 exit();
             }
         } else {
-            $error = "Incorrect password!";
+            $error = "Wrong password!";
         }
     } else {
-        $error = "No account found with this email!";
+        $error = "Email not found!";
     }
 }
 ?>
@@ -42,7 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sign In - Travel System</title>
+    <title>Login - Travel System</title>
     <style>
         * {
             margin: 0;
@@ -52,197 +51,321 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            /* OPTION 3: Warm Light Grey */
+            background: #f8f9fa;
+            background-image: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
         
-        .form-container {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        .container {
             width: 100%;
             max-width: 400px;
-            animation: slideUp 0.5s ease;
         }
         
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .form-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
         
-        h2 {
+        .logo {
             text-align: center;
-            color: #333;
             margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #2c3e50;
             font-size: 28px;
-            font-weight: 600;
+            margin-bottom: 5px;
         }
         
-        .error {
-            background: #ffecec;
-            color: #d32f2f;
-            padding: 12px;
-            border-radius: 8px;
+        .logo p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .input-group {
             margin-bottom: 20px;
-            border-left: 4px solid #d32f2f;
-            animation: fadeIn 0.3s ease;
         }
         
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        .input-group label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
-        input[type="email"],
-        input[type="password"] {
+        .input-group input {
             width: 100%;
             padding: 14px;
-            margin: 8px 0 20px 0;
-            border: 2px solid #e0e0e0;
+            border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.3s ease;
+            transition: all 0.3s;
+            background: white;
         }
         
-        input[type="email"]:focus,
-        input[type="password"]:focus {
+        .input-group input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #4dabf7;
+            box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
         }
         
-        button {
+        .input-group input.error {
+            border-color: #ff6b6b;
+            background: #fff5f5;
+        }
+        
+        .input-group input.success {
+            border-color: #51cf66;
+        }
+        
+        .error-message {
+            color: #ff6b6b;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        .password-wrapper {
+            position: relative;
+        }
+        
+        .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 0;
+            font-size: 18px;
+        }
+        
+        .server-error {
+            background: #ffe3e3;
+            color: #fa5252;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            border-left: 4px solid #fa5252;
+            font-size: 14px;
+        }
+        
+        .submit-btn {
             width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 16px;
+            background: #4dabf7;
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: all 0.3s;
+            margin-top: 10px;
         }
         
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        .submit-btn:hover {
+            background: #339af0;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(77, 171, 247, 0.2);
         }
         
-        button:active {
-            transform: translateY(0);
+        .submit-btn:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
         
-        .form-footer {
+        .links {
             text-align: center;
             margin-top: 25px;
             color: #666;
+            font-size: 14px;
         }
         
-        .form-footer a {
-            color: #667eea;
+        .links a {
+            color: #4dabf7;
             text-decoration: none;
             font-weight: 600;
-            transition: color 0.3s ease;
         }
         
-        .form-footer a:hover {
-            color: #764ba2;
+        .links a:hover {
             text-decoration: underline;
         }
         
-        .demo-credentials {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .demo-credentials h4 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .demo-credentials p {
-            margin: 5px 0;
+        @media (max-width: 480px) {
+            .form-card {
+                padding: 30px 20px;
+            }
         }
     </style>
 </head>
 <body>
-<div class="form-container">
-    <h2>🔐 Sign In</h2>
-
-    <?php if (!empty($error)): ?>
-        <div class="error"><?php echo $error; ?></div>
-    <?php endif; ?>
-
-    <form method="POST" action="">
-        <input type="email" name="email" placeholder="Enter your email" required>
-        <input type="password" name="password" placeholder="Enter your password" required>
-        <button type="submit">Sign In</button>
-    </form>
-
-    <div class="demo-credentials">
-        <h4>Demo Credentials:</h4>
-        <p><strong>Admin:</strong> admin@travel.com / admin123</p>
-        <p><strong>Note:</strong> Passwords are stored in plain text for demo</p>
+    <div class="container">
+        <div class="form-card">
+            <div class="logo">
+                <h1>Welcome Back</h1>
+                <p>Sign in to your account</p>
+            </div>
+            
+            <?php if ($error != ""): ?>
+                <div class="server-error">
+                    <?php echo $error; ?>
+                </div>
+            <?php endif; ?>
+            
+            <form method="POST" id="loginForm">
+                <div class="input-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" 
+                           placeholder="Enter your email" 
+                           value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>"
+                           required>
+                    <div class="error-message" id="emailError">Please enter a valid email address</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" name="password" 
+                               placeholder="Enter your password" 
+                               required>
+                        <button type="button" class="toggle-password" id="togglePassword">
+                            👁️
+                        </button>
+                    </div>
+                    <div class="error-message" id="passwordError">Password is required</div>
+                </div>
+                
+                <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
+            </form>
+                       
+            <div class="links">
+                Don't have an account? <a href="signup.php">Create Account</a>
+            </div>
+        </div>
     </div>
 
-    <div class="form-footer">
-        <p>Don't have an account? <a href="signup.php">Sign Up</a></p>
-    </div>
-</div>
-
-<script>
-    // Add some interactivity
-    document.addEventListener('DOMContentLoaded', function() {
-        const inputs = document.querySelectorAll('input');
+    <script>
+        // Form elements
+        const form = document.getElementById('loginForm');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const submitBtn = document.getElementById('submitBtn');
+        const toggleBtn = document.getElementById('togglePassword');
         
-        inputs.forEach(input => {
-            // Add focus effect
-            input.addEventListener('focus', function() {
-                this.parentNode.classList.add('focused');
-            });
+        // Error elements
+        const emailError = document.getElementById('emailError');
+        const passwordError = document.getElementById('passwordError');
+        
+        // Toggle password visibility
+        toggleBtn.addEventListener('click', function() {
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            this.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
+        });
+        
+        // Validation functions
+        function validateEmail() {
+            const value = email.value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             
-            input.addEventListener('blur', function() {
-                if (this.value === '') {
-                    this.parentNode.classList.remove('focused');
-                }
-            });
-            
-            // Check if input has value on page load
-            if (input.value !== '') {
-                input.parentNode.classList.add('focused');
+            if (!value) {
+                showError(email, emailError, 'Email is required');
+                return false;
             }
+            
+            if (!emailRegex.test(value)) {
+                showError(email, emailError, 'Please enter a valid email address');
+                return false;
+            }
+            
+            hideError(email, emailError);
+            return true;
+        }
+        
+        function validatePassword() {
+            const value = password.value;
+            
+            if (!value) {
+                showError(password, passwordError, 'Password is required');
+                return false;
+            }
+            
+            hideError(password, passwordError);
+            return true;
+        }
+        
+        // Helper functions
+        function showError(input, errorElement, message) {
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            input.classList.add('error');
+            input.classList.remove('success');
+        }
+        
+        function hideError(input, errorElement) {
+            errorElement.style.display = 'none';
+            input.classList.remove('error');
+            input.classList.add('success');
+        }
+        
+        // Real-time validation
+        email.addEventListener('input', validateEmail);
+        email.addEventListener('blur', validateEmail);
+        
+        password.addEventListener('input', validatePassword);
+        password.addEventListener('blur', validatePassword);
+        
+        // Check form validity for submit button
+        function checkFormValidity() {
+            const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
+            const isPasswordValid = password.value.length >= 1;
+            
+            submitBtn.disabled = !(isEmailValid && isPasswordValid);
+        }
+        
+        // Check on input
+        form.addEventListener('input', checkFormValidity);
+        
+        // Form submission
+        form.addEventListener('submit', function(e) {
+            const isEmailValid = validateEmail();
+            const isPasswordValid = validatePassword();
+            
+            if (!isEmailValid || !isPasswordValid) {
+                e.preventDefault();
+                
+                if (!isEmailValid) {
+                    email.focus();
+                } else if (!isPasswordValid) {
+                    password.focus();
+                }
+                
+                return false;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+            return true;
         });
         
-        // Form submission feedback
-        const form = document.querySelector('form');
-        form.addEventListener('submit', function(e) {
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Signing in...';
-            submitBtn.disabled = true;
-            
-            // Re-enable button after 3 seconds if page doesn't redirect
-            setTimeout(() => {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }, 3000);
-        });
-    });
-</script>
+        // Initialize
+        checkFormValidity();
+        email.focus();
+    </script>
 </body>
 </html>

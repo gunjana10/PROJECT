@@ -1,5 +1,10 @@
 <?php
 session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: signup.php?message=Please sign up to book");
+    exit();
+}
+// ... rest of your existing code ...
 include("db.php");
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
