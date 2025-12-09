@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annapurna Base Camp - Explore Nepal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .back-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .hero-header {
+            position: relative;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            height: 400px;
+        }
+
+        .hero-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: brightness(0.7);
+        }
+
+        .hero-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+        }
+
+        .hero-content h1 {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+            text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .hero-content p {
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .rating {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            padding: 8px 20px;
+            border-radius: 25px;
+            margin-top: 15px;
+            font-weight: 600;
+            color: #8e6c0a;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .price-tag {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .introduction-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .introduction-card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .introduction-card h2::before {
+            content: '🏔️';
+            font-size: 1.5rem;
+        }
+
+        .introduction-card p {
+            color: #5d6d7e;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+
+        .highlights-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .highlight-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            font-weight: 500;
+            color: #667eea;
+        }
+
+        .stats-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .stats-card h2 {
+            color: #667eea;
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-card h2::before {
+            content: '📊';
+            font-size: 1.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 15px;
+            color: white;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .content-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .itinerary-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .itinerary-card h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .itinerary-card h3::before {
+            content: '🗓️';
+            font-size: 1.3rem;
+        }
+
+        .itinerary-day {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .itinerary-day:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateX(5px);
+        }
+
+        .itinerary-day h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        .itinerary-day p {
+            color: #5d6d7e;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .booking-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .booking-card h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .booking-card h3::before {
+            content: '🎯';
+            font-size: 1.3rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e8eaf0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .book-now-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .book-now-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .policy-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .policy-section h3 {
+            color: #667eea;
+            margin-bottom: 25px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .policy-section h3::before {
+            content: '📝';
+            font-size: 1.3rem;
+        }
+
+        .policy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .policy-item {
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .policy-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .policy-item h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .policy-item p {
+            color: #5d6d7e;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #f44336, #da190b);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .hero-section,
+            .content-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid,
+            .highlights-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .hero-content h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero-header {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-btn">← Back to All Destinations</a>
+        
+        <!-- Success/Error Messages -->
+        <div class="success-message" id="successMessage">
+            ✅ Booking submitted successfully! We will contact you within 24 hours.
+        </div>
+        <div class="error-message" id="errorMessage">
+            ❌ There was an error submitting your booking. Please try again.
+        </div>
+        
+        <!-- Hero Header with Image -->
+        <div class="hero-header">
+            <img src="images/arnapurna.jpg" alt="Annapurna Base Camp" class="hero-image">
+            <div class="hero-content">
+                <h1>Annapurna Base Camp Trek</h1>
+                <p>Experience the Majesty of the Himalayas</p>
+                <div class="rating">⭐ 4.9/5 Excellent</div>
+                <div class="price-tag">From RS.13,850</div>
+            </div>
+        </div>
+
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <div class="introduction-card">
+                <h2>Journey to the Himalayas</h2>
+                <p>Embark on an unforgettable adventure to the heart of the Annapurna range. The Annapurna Base Camp Trek offers breathtaking mountain vistas, rich cultural encounters, and the thrill of reaching one of the world's most spectacular base camps.</p>
+                
+                <div class="highlights-grid">
+                    <div class="highlight-item">🏔️ Stunning Mountain Views</div>
+                    <div class="highlight-item">🌄 Sunrise at Poon Hill</div>
+                    <div class="highlight-item">🏕️ Traditional Tea Houses</div>
+                    <div class="highlight-item">🌿 Rhododendron Forests</div>
+                    <div class="highlight-item">👥 Local Gurung Culture</div>
+                    <div class="highlight-item">🥾 Moderate Challenge</div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <h2>Trek Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Days Trekking</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">4,130m</div>
+                        <div class="stat-label">Max Altitude</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">Moderate</div>
+                        <div class="stat-label">Difficulty Level</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">Mar-Nov</div>
+                        <div class="stat-label">Best Season</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section">
+            <div class="itinerary-card">
+                <h3>Trekking Itinerary</h3>
+                <div class="itinerary-day">
+                    <h4>Day 1-2: Arrival & Preparation</h4>
+                    <p>Welcome to Kathmandu! Sightseeing and fly to Pokhara to prepare for your adventure.</p>
+                </div>
+                <div class="itinerary-day">
+                    <h4>Day 3-5: Forest Trails</h4>
+                    <p>Trek through beautiful villages and enchanting rhododendron forests. Overnight in cozy tea houses.</p>
+                </div>
+                <div class="itinerary-day">
+                    <h4>Day 6-8: Mountain Views</h4>
+                    <p>Witness spectacular sunrise from Poon Hill and continue through stunning landscapes to Tadapani.</p>
+                </div>
+                <div class="itinerary-day">
+                    <h4>Day 9-11: Base Camp Achievement</h4>
+                    <p>Reach Annapurna Base Camp at 4,130m! Celebrate with panoramic views of the entire Annapurna range.</p>
+                </div>
+                <div class="itinerary-day">
+                    <h4>Day 12: Return Journey</h4>
+                    <p>Trek back to Pokhara, celebrate your achievement, and prepare for departure with unforgettable memories.</p>
+                </div>
+            </div>
+
+            <div class="booking-card">
+                <h3>Book Your Adventure</h3>
+                <form method="POST" action="process-booking.php" id="annapurna-booking-form">
+                    <input type="hidden" name="destination" value="Annapurna Base Camp">
+                    
+                    <div class="form-group">
+                        <label for="full_name">Full Name *</label>
+                        <input type="text" id="full_name" name="full_name" required placeholder="Enter your full name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Phone Number *</label>
+                        <input type="tel" id="phone" name="phone" required placeholder="+977 98XXXXXXX">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="start_date">Trek Start Date *</label>
+                        <input type="date" id="start_date" name="start_date" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="end_date">Trek End Date *</label>
+                        <input type="date" id="end_date" name="end_date" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="travelers">Number of Travelers *</label>
+                        <select id="travelers" name="travelers" required>
+                            <option value="">Select travelers</option>
+                            <option value="1">1 Person</option>
+                            <option value="2">2 People</option>
+                            <option value="3">3 People</option>
+                            <option value="4">4 People</option>
+                            <option value="5">5+ People</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="package">Trek Package *</label>
+                        <select id="package" name="package" required>
+                            <option value="basic">Basic Trek (RS.13,850)</option>
+                            <option value="standard">Standard Package (RS.18,500)</option>
+                            <option value="premium">Premium Experience (RS.25,000)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="special_requests">Special Requests</label>
+                        <textarea id="special_requests" name="special_requests" placeholder="Any dietary requirements, special needs, or additional requests..."></textarea>
+                    </div>
+                    
+                    <input type="hidden" id="final_price" name="price" value="13850">
+                    
+                    <button type="submit" class="book-now-btn" id="bookNowBtn">Book Now - RS.13,850</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Policy Section -->
+        <div class="policy-section">
+            <h3>Booking Policy</h3>
+            <div class="policy-grid">
+                <div class="policy-item">
+                    <h4>✅ Free Cancellation</h4>
+                    <p>Full refund up to 30 days before travel</p>
+                </div>
+                <div class="policy-item">
+                    <h4>⚠️ 15-30 Days</h4>
+                    <p>50% refund of total amount</p>
+                </div>
+                <div class="policy-item">
+                    <h4>❌ 7-14 Days</h4>
+                    <p>25% refund available</p>
+                </div>
+                <div class="policy-item">
+                    <h4>🚫 Last Week</h4>
+                    <p>No refund available</p>
+                </div>
+                <div class="policy-item">
+                    <h4>📞 Support</h4>
+                    <p>+977-1-XXXXXXX</p>
+                </div>
+                <div class="policy-item">
+                    <h4>📧 Email</h4>
+                    <p>support@explorenepal.com</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamic pricing based on number of travelers and package
+        const annapurnaBasePrice = 13850;
+        const travelersSelect = document.getElementById('travelers');
+        const packageSelect = document.getElementById('package');
+        const bookButton = document.getElementById('bookNowBtn');
+        const priceInput = document.getElementById('final_price');
+
+        function updateAnnapurnaPrice() {
+            const travelers = parseInt(travelersSelect.value) || 1;
+            const packageType = packageSelect.value;
+            
+            let packageMultiplier = 1;
+            if (packageType === 'standard') packageMultiplier = 1.3;
+            else if (packageType === 'premium') packageMultiplier = 1.8;
+            
+            const totalPrice = Math.round(annapurnaBasePrice * travelers * packageMultiplier);
+            bookButton.textContent = `Book Now - RS.${totalPrice.toLocaleString()}`;
+            priceInput.value = totalPrice;
+        }
+
+        travelersSelect.addEventListener('change', updateAnnapurnaPrice);
+        packageSelect.addEventListener('change', updateAnnapurnaPrice);
+
+        // Set minimum date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start_date').min = today;
+        document.getElementById('end_date').min = today;
+
+        // Update end date min when start date changes
+        document.getElementById('start_date').addEventListener('change', function() {
+            document.getElementById('end_date').min = this.value;
+        });
+
+        // Check URL for success/error parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('booking') === 'success') {
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('successMessage').scrollIntoView({ behavior: 'smooth' });
+        } else if (urlParams.get('booking') === 'error') {
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorMessage').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>

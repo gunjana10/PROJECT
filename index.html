@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TripNext</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    
+  <style>
+    /* ---------- Global Styles ---------- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: #99bdc5;
+      color: #222;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    /* ---------- Navbar ---------- */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 88px;
+      background-color:rgb(98, 124, 124);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position:sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #006d6d;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo::before {
+      content: "✈️";
+    }
+
+    nav ul {
+      display: flex;
+      list-style: none;
+      gap: 30px;
+    }
+
+    nav ul li {
+      font-weight: 500;
+      color: #333;
+      gap: 15px;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .nav-right button {
+      border: none;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .signin-btn {
+      background: #fff;
+      border: 1px solid #ccc;
+    }
+
+    .admin-btn {
+      background: #f7f7f7;
+      border: 1px solid #ccc;
+    }
+
+    .getstarted-btn {
+      background-color: #004d4d;
+      color: white;
+    }
+
+    /* ---------- Hero Section ---------- */
+    .project {
+      text-align: center;
+      background-color: #7fa9a9;
+      color:black;
+      padding: 100px 20px;
+      background-image: url(images/background.jpg);
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 15px;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      max-width: 650px;
+      margin: 0 auto 40px auto;
+      color: #f2f2f2;
+    }
+
+    .search-box {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    .search-box input {
+      width: 350px;
+      padding: 12px 15px;
+      border-radius: 25px 0 0 25px;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+    }
+
+    .search-box button {
+      background-color: #004d4d;
+      border: none;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 0 25px 25px 0;
+      cursor: pointer;
+    }
+
+    .start-btn {
+      background-color: #ff5a00;
+      color: white;
+      border: none;
+      padding: 14px 30px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .start-btn:hover {
+      background-color: #ff7300;
+    }
+
+    /* ------- Search Container ------- */
+    .search-container {
+      background-color:aliceblue;
+      padding: 45px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      width: 90%;
+      max-width: 900px;
+      text-align: center;
+      margin: -50px auto 50px auto;
+    }
+
+    .search-container h2 {
+      color: #004d4d;
+      font-size: 1.8rem;
+      margin-bottom: 25px;
+      font-weight: 700;
+    }
+
+    /* ------- Search Form ------- */
+    .search-bar {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .search-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 180px;
+    }
+
+    .search-field label {
+      font-weight: 600;
+      color: #004d4d;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    .search-field-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      background-color: #fff;
+    }
+
+    .search-field-input input, .search-field-input select {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 1rem;
+      background: transparent;
+    }
+
+    .search-field-input i {
+      color: #004d4d;
+      font-size: 1.1rem;
+    }
+
+    /* ------- Search Button ------- */
+    .search-button {
+      background-color: #004d4d;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      transition: background 0.3s;
+      margin-top: 24px;
+      height: fit-content;
+    }
+
+    .search-button:hover {
+      background-color: #007272;
+    }
+
+    /* ------- Explore Section ------- */
+    .explore-section {
+      text-align: center;
+      padding: 60px 20px;
+      background-color:rgb(176, 176, 168);
+      width: 100%;
+    }
+
+    .explore-section h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2f3d4c;
+    }
+
+    .explore-section p {
+      color: #6b7280;
+      font-size: 1.1rem;
+      margin-bottom: 40px;
+    }
+
+    .card-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 25px;
+    }
+
+    .card {
+      background-color: #f3fdf8;
+      border-radius: 10px;
+      width: 280px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-8px);
+    }
+
+    .card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+    }
+
+    .rating {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    .card-content {
+      padding: 20px;
+    }
+
+    .card-content h3 {
+      color: #004d40;
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    .card-content p {
+      color: #555;
+      font-size: 0.95rem;
+      margin: 5px 0;
+    }
+
+    .price {
+      font-weight: bold;
+      color: #003c30;
+      margin-top: 10px;
+    }
+
+    .btn {
+      margin-top: 15px;
+      background-color: #004d40;
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn:hover {
+      background-color: #00695c;
+    }
+
+    /* ------- Choose Section ------- */
+    .choose-section {
+      background-color: #f0faf7;
+      text-align: center;
+      padding: 70px 20px;
+      width: 100%;
+    }
+
+    .choose-section h2 {
+      font-size: 2rem;
+      color: #004d40;
+      font-weight: 700;
+    }
+
+    .choose-section p {
+      color: #6b7280;
+      margin-bottom: 50px;
+      font-size: 1.1rem;
+    }
+
+    .features-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 30px;
+    }
+
+    .feature-card {
+      background-color: #f8fffc;
+      width: 270px;
+      border-radius: 20px;
+      padding: 40px 25px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .feature-card i {
+      font-size: 2.5rem;
+      color: #005f50;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      color: #004d40;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: #5f6d66;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* ------- Journey Section ------- */
+    .journey-section {
+      background-color: #005f63;
+      color: white;
+      text-align: center;
+      padding: 60px 20px;
+      width: 100%;
+    }
+
+    .journey-section h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 15px;
+    }
+
+    .journey-section p {
+      font-size: 1.1rem;
+      color: #e2e8f0;
+      margin-bottom: 40px;
+    }
+
+    .button-container {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .btn-primary {
+      background-color: #ff5300;
+      color: white;
+      padding: 12px 30px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+
+    .btn-primary:hover {
+      background-color: #e04a00;
+    }
+
+    .btn-outline {
+      border: 1.5px solid white;
+      color: white;
+      padding: 12px 30px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+
+    .btn-outline:hover {
+      background-color: white;
+      color: #005f63;
+    }
+
+    /* ------- Footer Section ------- */
+    .footer-section {
+      background-color: #5a9b97;
+      color: white;
+      padding-top: 60px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .footer-top h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .footer-top p {
+      font-size: 1rem;
+      color: #e2e8f0;
+      margin-bottom: 50px;
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 40px;
+      text-align: left;
+      padding: 0 30px 30px 30px;
+    }
+
+    .footer-box {
+      flex: 1;
+      min-width: 200px;
+      max-width: 250px;
+    }
+
+    .footer-logo {
+      color: #ff3c00;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .footer-box h4 {
+      color: #ff3c00;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    .footer-box ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .footer-box ul li {
+      color: white;
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+
+    .footer-box ul li:hover {
+      text-decoration: underline;
+    }
+
+    .footer-box p {
+      color: #f2f2f2;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .footer-box i {
+      color: #ff3c00;
+      margin-right: 8px;
+    }
+
+    .social-icons {
+      margin-top: 15px;
+    }
+
+    .social-icons a {
+      display: inline-block;
+      margin-right: 10px;
+      font-size: 1.3rem;
+      color: white;
+      background-color: #f2f2f2;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      text-align: center;
+      line-height: 32px;
+      transition: 0.3s;
+    }
+
+    .social-icons a:hover {
+      background-color: #ff3c00;
+      color: white;
+    }
+
+    .footer-bottom {
+      background-color: #4a8b87;
+      text-align: center;
+      padding: 15px 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .footer-bottom p {
+      color: #f2f2f2;
+      font-size: 0.9rem;
+    }
+
+    .footer-bottom strong {
+      color: #ff3c00;
+    }
+
+    /* ------- Responsive ------- */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        padding: 15px 20px;
+        gap: 10px;
+      }
+      nav ul {
+        gap: 15px;
+      }
+      .hero h1 {
+        font-size: 2.2rem;
+      }
+      .search-box input {
+        width: 80%;
+      }
+      .search-bar {
+        flex-direction: column;
+      }
+      .search-field,
+      .search-button {
+        width: 100%;
+      }
+      .button-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .footer-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+    }
+
+    /* ------- Search Results Styles ------- */
+    .search-results {
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 30px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      display: none;
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .results-title {
+      font-size: 1.5rem;
+      color: #004d4d;
+    }
+
+    .results-count {
+      color: #666;
+      font-weight: 600;
+    }
+
+    .destination-cards-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+    }
+
+    .destination-card-result {
+      background-color: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .destination-card-result:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-title-result {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #004d4d;
+      margin: 0;
+    }
+
+    .card-dates-result {
+      color: #666;
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    .card-price-result {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #004d4d;
+      margin: 0;
+    }
+
+    .card-button-result {
+      background: linear-gradient(to right, #004d4d, #007272);
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 5px;
+      display: block;
+    }
+
+    .card-button-result:hover {
+      background: linear-gradient(to right, #003c3c, #006060);
+      text-decoration: none;
+      color: white;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 30px;
+      color: #666;
+      font-size: 1rem;
+    }
+
+    .no-results i {
+      font-size: 2.5rem;
+      color: #ccc;
+      margin-bottom: 10px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header>
+    <div class="logo">TripNext</div>
+    <nav>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="#">Discover</a></li>
+        <li><a href="#">Plan</a></li>
+        <li><a href="#">Blog</a></li>
+        <li><a href="#">About</a></li>
+      </ul>
+    </nav>
+    <div class="nav-right">
+      <button class="signin-btn"><a href="signin.php">Sign In</a></button>
+      <button class="getstarted-btn"><a href="signup.php">Get Started</a></button>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="project">
+    <div class="hero">
+      <h1>Your Next Adventure Awaits</h1>
+      <p>Discover breathtaking destinations, plan unforgettable trips, and create memories that last a lifetime.</p> <br> <br>
+      <div class="search-box">
+        <input type="text" placeholder="Where do you want to go?">
+        <button>🔍</button>
+      </div>
+      <button class="start-btn">Start Your Adventure</button>
+    </div>
+  </section>
+  
+  <!-- Search Container -->
+  <div class="search-container">
+    <h2>Where do you want to go?</h2>
+    <div class="search-bar">
+      <!-- Start Date -->
+      <div class="search-field">
+        <label for="startDate">Start Date</label>
+        <div class="search-field-input">
+          <i class="fa fa-calendar"></i>
+          <input type="date" id="startDate" placeholder="Start Date">
+        </div>
+      </div>
+      
+      <!-- End Date -->
+      <div class="search-field">
+        <label for="endDate">End Date</label>
+        <div class="search-field-input">
+          <i class="fa fa-calendar"></i>
+          <input type="date" id="endDate" placeholder="End Date">
+        </div>
+      </div>
+      
+      <!-- Destination Dropdown -->
+      <div class="search-field">
+        <label for="destination">Destination</label>
+        <div class="search-field-input">
+          <i class="fa fa-map-marker"></i>
+          <select id="destination">
+            <option value="">Select Destination</option>
+            <option value="Pokhara">Pokhara</option>
+            <option value="Chitwan">Chitwan</option>
+            <option value="Lumbini">Lumbini</option>
+            <option value="Annapurna">Annapurna</option>
+          </select>
+        </div>
+      </div>
+      
+      <button class="search-button" id="searchButton"><i class="fa fa-search"></i> Search</button>
+    </div>
+    
+    <!-- Search Results Section -->
+    <div class="search-results" id="searchResults">
+      <div class="results-header">
+        <h2 class="results-title">Search Results</h2>
+        <div class="results-count" id="resultsCount">0 destinations found</div>
+      </div>
+      
+      <div class="destination-cards-results" id="destinationCardsResults">
+        <!-- Results will be populated here by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Explore Section -->
+  <section class="explore-section">
+    <h2>Explore Nepal</h2>
+    <p>Discover the breathtaking beauty and spiritual richness of Nepal's most iconic destinations</p>
+
+    <div class="card-container">
+      <!-- Lumbini -->
+      <div class="card">
+        <img src="images/lumbini.jpg" alt="Lumbini">
+        <div class="rating">⭐ 4.9</div>
+        <div class="card-content">
+          <h3>Lumbini</h3>
+          <p>Birthplace of Lord Buddha, UNESCO World Heritage Site</p>
+          <p class="price">From RS.21,480</p>
+          <button class="btn"><a href="lumbini.html" class="btn view-details-btn">View Details</a></button>
+        </div>
+      </div>
+
+      <!-- Chitwan National Park -->
+      <div class="card">
+        <img src="images/chitwan.jpg" alt="Chitwan National Park">
+        <div class="rating">⭐ 4.8</div>
+        <div class="card-content">
+          <h3>Chitwan National Park</h3>
+          <p>Wildlife safari and jungle adventures</p>
+          <p class="price">From RS.35,880</p>
+          <button class="btn"><a href="chitwan.html" class="btn view-details-btn">View Details</a></button>
+        </div>
+      </div>
+
+      <!-- Annapurna Base Camp -->
+      <div class="card">
+        <img src="images/arnapurna.jpg" alt="Annapurna Base Camp">
+        <div class="rating">⭐ 4.9</div>
+        <div class="card-content">
+          <h3>Annapurna Base Camp (ABC)</h3>
+          <p>Stunning mountain views and trekking paradise</p>
+          <p class="price">From RS.13,850</p>
+          <button class="btn"><a href="annapurna.html" class="btn view-details-btn">View Details</a></button>
+        </div>
+      </div>
+
+       <!-- Pokhara -->
+      <div class="card">
+        <img src="images/pokhara.jpg" alt="Pokhara">
+        <div class="rating">⭐ 4.7</div>
+        <div class="card-content">
+          <h3>Pokhara</h3>
+          <p>Stunning mountain views and trekking paradise</p>
+          <p class="price">From RS.23,880</p>
+          <button class="btn"><a href="pokhara.html" class="btn view-details-btn">View Details</a></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Choose Section -->
+  <section class="choose-section">
+    <h2>Why Choose TripNext?</h2>
+    <p>Everything you need to plan, book, and enjoy your perfect trip</p>
+
+    <div class="features-container">
+      
+      <div class="feature-card">
+        <i class="fa fa-map-marker"></i>
+        <h3>Smart Planning</h3>
+        <p>AI-powered recommendations based on your preferences and travel style</p>
+      </div>
+
+      <div class="feature-card">
+        <i class="fa fa-users"></i>
+        <h3>Group Travel</h3>
+        <p>Coordinate with friends and family to plan the perfect group adventure</p>
+      </div>
+
+      <div class="feature-card">
+        <i class="fa fa-camera"></i>
+        <h3>Travel Journal</h3>
+        <p>Document your journey with photos, notes, and memories that last forever</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Journey Section -->
+  <section class="journey-section">
+    <h2>Ready to Start Your Journey?</h2>
+    <p>Join thousands of travelers who trust TripNext to make their dream trips a reality</p>
+    
+    <div class="button-container">
+      <a href="#" class="btn-primary">Sign Up Free</a>
+      <a href="#" class="btn-outline">Learn More</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer-section">
+    <div class="footer-top">
+      <h2>Ready to Explore ?</h2>
+      <p>Book your travel package today and create unforgettable memories in the beautiful landscapes of Nepal.</p>
+    </div>
+
+    <div class="footer-content">
+      <div class="footer-box">
+        <h3 class="footer-logo">TripNest</h3>
+        <p>Your trusted partner for exploring the beautiful destinations of Nepal with ease and comfort.</p>
+        <div class="social-icons">
+          <a href="#"><i class="fa fa-facebook"></i></a>
+          <a href="#"><i class="fa fa-instagram"></i></a>
+        </div>
+      </div>
+
+      <div class="footer-box">
+        <h4>Destinations</h4>
+        <ul>
+          <li>Pokhara</li>
+          <li>Chitwan</li>
+          <li>Kathmandu</li>
+          <li>Lumbini</li>
+        </ul>
+      </div>
+
+      <div class="footer-box">
+        <h4>Quick Links</h4>
+        <ul>
+          <li>About Us</li>
+          <li>Contact Us</li>
+          <li>Terms and Conditions</li>
+          <li>Privacy Policy</li>
+        </ul>
+      </div>
+
+      <div class="footer-box">
+        <h4>Contact Info</h4>
+        <p><i class="fa fa-map-marker"></i> Kathmandu, Nepal</p>
+        <p><i class="fa fa-phone"></i> +977 9849086473</p>
+        <p><i class="fa fa-envelope"></i> info@tripnest.com</p>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p><i class="fa fa-copyright"></i> 2025 <strong>TripNest.</strong> All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const searchButton = document.getElementById('searchButton');
+      const searchResults = document.getElementById('searchResults');
+      const destinationCardsResults = document.getElementById('destinationCardsResults');
+      const resultsCount = document.getElementById('resultsCount');
+      
+      // Set minimum date to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('startDate').min = today;
+      document.getElementById('endDate').min = today;
+      
+      // Update end date min when start date changes
+      document.getElementById('startDate').addEventListener('change', function() {
+        document.getElementById('endDate').min = this.value;
+      });
+      
+      // Destination data for Nepal with page links
+      const destinations = {
+        "Pokhara": {
+          name: "Pokhara",
+          price: "RS.23,880",
+          page: "pokhara.html"
+        },
+        "Chitwan": {
+          name: "Chitwan National Park",
+          price: "RS.35,880",
+          page: "chitwan.html"
+        },
+        "Lumbini": {
+          name: "Lumbini",
+          price: "RS.21,480",
+          page: "lumbini.html"
+        },
+        "Annapurna": {
+          name: "Annapurna Circuit",
+          price: "RS.13,850",
+          page: "annapurna.html"
+        }
+      };
+      
+      // Handle search button click
+      searchButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const destination = document.getElementById('destination').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        // Validate dates
+        if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+          alert('End date must be after start date');
+          return;
+        }
+        
+        // Validate destination
+        if (!destination) {
+          alert('Please select a destination');
+          return;
+        }
+        
+        // Show results section
+        searchResults.style.display = 'block';
+        
+        // Format dates for display
+        const formattedStartDate = formatDate(startDate);
+        const formattedEndDate = formatDate(endDate);
+        
+        // Clear previous results
+        destinationCardsResults.innerHTML = '';
+        
+        // Display results
+        if (destination && destinations[destination]) {
+          const dest = destinations[destination];
+          
+          const card = document.createElement('div');
+          card.className = 'destination-card-result';
+          card.innerHTML = `
+            <h3 class="card-title-result">${dest.name}</h3>
+            <p class="card-dates-result">📅 ${formattedStartDate} - ${formattedEndDate}</p>
+            <p class="card-price-result">${dest.price}</p>
+            <a href="${dest.page}" class="card-button-result">Book Now</a>
+          `;
+          destinationCardsResults.appendChild(card);
+          
+          resultsCount.textContent = "1 destination found";
+        } else {
+          destinationCardsResults.innerHTML = `
+            <div class="no-results">
+              <i>✈️</i>
+              <p>Please select one of the available destinations from the dropdown</p>
+            </div>
+          `;
+          resultsCount.textContent = "0 destinations found";
+        }
+        
+        // Scroll to results
+        searchResults.scrollIntoView({ behavior: 'smooth' });
+      });
+      
+      // Helper function to format date as mm/dd/yyyy
+      function formatDate(dateString) {
+        if (!dateString) return "Not selected";
+        const date = new Date(dateString);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${month}/${day}/${year}`;
+      }
+    });
+  </script>
+
+</body>
+</html>
