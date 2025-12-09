@@ -31,7 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <?php if (!empty($error)) echo "<p class='error'>$error</p>"; ?>
 
 <form method="POST">
-    <input type="text" name="fullname" placeholder="Full Name" required>
+    <input type="text" name="fullname" placeholder="Full Name" required pattern="[A-Za-z\s]+">
     <input type="email" name="email" placeholder="Email" required>
     <input type="password" name="password" placeholder="Password" required>
     <button type="submit">Sign Up</button>
