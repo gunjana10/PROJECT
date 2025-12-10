@@ -61,6 +61,7 @@
       font-weight: 500;
       color: #333;
       gap: 15px;
+      position: relative;
     }
 
     .nav-right {
@@ -90,6 +91,65 @@
     .getstarted-btn {
       background-color: #004d4d;
       color: white;
+    }
+
+    /* ---------- Dropdown Styles ---------- */
+    .dropdown {
+      position: relative;
+    }
+
+    .dropbtn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: #ffffff;
+      min-width: 220px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      z-index: 100;
+      top: 100%;
+      left: 0;
+      padding: 10px 0;
+      margin-top: 10px;
+    }
+
+    .dropdown-content a {
+      color: #333;
+      padding: 12px 20px;
+      text-decoration: none;
+      display: block;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .dropdown-content a:hover {
+      background-color: #f0faf7;
+      color: #004d4d;
+      border-left: 3px solid #004d4d;
+    }
+
+    .dropdown:hover .dropdown-content {
+      display: block;
+    }
+
+    .dropdown:hover .dropbtn {
+      color: #004d4d;
+    }
+
+    .dropdown-content::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: 20px;
+      border-width: 0 10px 10px 10px;
+      border-style: solid;
+      border-color: transparent transparent #ffffff transparent;
     }
 
     /* ---------- Hero Section ---------- */
@@ -573,6 +633,8 @@
       }
       nav ul {
         gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
       }
       .hero h1 {
         font-size: 2.2rem;
@@ -595,6 +657,23 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
+      }
+      
+      /* Responsive dropdown */
+      .dropdown-content {
+        position: static;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        margin-top: 0;
+        display: none;
+      }
+      .dropdown-content::before {
+        display: none;
+      }
+      .dropdown-content a {
+        padding: 10px 15px;
+        background-color: #f8f8f8;
       }
     }
 
@@ -713,7 +792,18 @@
     <nav>
       <ul>
         <li><a href="index.html">Home</a></li>
-        <li><a href="#">Discover</a></li>
+        
+        <!-- Destinations Dropdown -->
+        <li class="dropdown">
+          <a href="#" class="dropbtn">Destinations <i class="fa fa-caret-down"></i></a>
+          <div class="dropdown-content">
+            <a href="pokhara.html">Pokhara</a>
+            <a href="chitwan.html">Chitwan National Park</a>
+            <a href="lumbini.html">Lumbini</a>
+            <a href="annapurna.html">Annapurna Circuit</a>
+          </div>
+        </li>
+        
         <li><a href="#">Plan</a></li>
         <li><a href="#">Blog</a></li>
         <li><a href="#">About</a></li>
