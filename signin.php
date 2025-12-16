@@ -243,14 +243,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <input type="password" id="password" name="password" 
                                placeholder="Enter your password" 
                                required>
-                        <button type="button" class="toggle-password" id="togglePassword">
-                            👁️
-                        </button>
+                        <button type="button" class="toggle-password" id="togglePassword"> </button>
                     </div>
                     <div class="error-message" id="passwordError">Password is required</div>
                 </div>
-                
-                <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
+                 <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
             </form>
                        
             <div class="links">
@@ -275,7 +272,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         toggleBtn.addEventListener('click', function() {
             const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
             password.setAttribute('type', type);
-            this.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
+            this.textContent = type === 'password';
         });
         
         // Validation functions

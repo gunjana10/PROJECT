@@ -283,7 +283,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                            placeholder="Enter your full name" 
                            value="<?php echo isset($_POST['fullname']) ? htmlspecialchars($_POST['fullname']) : ''; ?>"
                            required>
-                    <div class="error-message" id="fullnameError">Name must be at least 3 characters</div>
+                    
                 </div>
                 
                 <div class="input-group">
@@ -299,7 +299,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="phone">Phone Number</label>
                     <div class="phone-wrapper">
                         <div class="country-code">
-                            <input type="text" value="+91" readonly>
+                            <input type="text" value="+98" readonly>
                         </div>
                         <div class="phone-number">
                             <input type="tel" id="phone" name="phone" 
@@ -318,7 +318,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                            placeholder="Create a password (min 6 characters)" 
                            minlength="6"
                            required>
-                    <div class="password-hint">Must be at least 6 characters long</div>
+                    
                     <div class="strength-meter">
                         <div class="strength-bar" id="strengthBar"></div>
                     </div>

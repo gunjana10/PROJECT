@@ -431,6 +431,13 @@
             box-shadow: 0 5px 15px rgba(244, 67, 54, 0.3);
         }
 
+        .input-hint {
+            color: #666;
+            font-size: 0.8rem;
+            display: block;
+            margin-top: 5px;
+        }
+
         @media (max-width: 768px) {
             .hero-section,
             .content-section {
@@ -454,7 +461,7 @@
 </head>
 <body>
     <div class="container">
-        <a href="index.html" class="back-btn">← Back to All Destinations</a>
+        <a href="index.php" class="back-btn">← Back to All Destinations</a>
         
         <!-- Success/Error Messages -->
         <div class="success-message" id="successMessage">
@@ -557,7 +564,7 @@
                     
                     <div class="form-group">
                         <label for="phone">Phone Number *</label>
-                        <input type="tel" id="phone" name="phone" required placeholder="+977 98XXXXXXX" minlength="10" pattern="[0-9]*">
+                        <input type="tel" id="phone" name="phone" required placeholder="Enter your phone number" pattern="[\+\d\s\-\(\)]*">
                     </div>
                     
                     <div class="form-group">
@@ -567,7 +574,7 @@
                     
                     <div class="form-group">
                         <label for="end_date">Pilgrimage End Date *</label>
-                        <input type="date" id="end_date" name="end_date" required>
+                        <input type="date" id="end_date" name="end_date" required readonly>
                     </div>
                     
                     <div class="form-group">
@@ -588,6 +595,29 @@
                             <option value="basic">Basic Pilgrimage (RS.21,480)</option>
                             <option value="standard">Standard Package (RS.28,500)</option>
                             <option value="premium">Premium Experience (RS.35,000)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Hotel Options -->
+                    <div class="form-group">
+                        <label for="hotel">Hotel Category *</label>
+                        <select id="hotel" name="hotel" required>
+                            <option value="basic">Basic Hotel</option>
+                            <option value="3star">3-Star Hotel</option>
+                            <option value="4star">4-Star Hotel</option>
+                            <option value="5star">5-Star Hotel</option>
+                            <option value="luxury">Luxury Resort</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Transport Options -->
+                    <div class="form-group">
+                        <label for="transport">Transport Type *</label>
+                        <select id="transport" name="transport" required>
+                            <option value="bus">Bus</option>
+                            <option value="air">Air</option>
+                            <option value="private">Private Vehicle</option>
+                            <option value="jeep">Jeep</option>
                         </select>
                     </div>
                     
@@ -625,48 +655,98 @@
                 </div>
                 <div class="policy-item">
                     <h4>📞 Support</h4>
-                    <p>+977-1-XXXXXXX</p>
+                    <p>+977-9765340620</p>
                 </div>
                 <div class="policy-item">
                     <h4>📧 Email</h4>
-                    <p>support@explorenepal.com</p>
+                    <p>tripnext@explorenepal.com</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Dynamic pricing based on number of travelers and package
+        // Dynamic pricing based on number of travelers, package, hotel, and transport
         const lumbiniBasePrice = 21480;
         const travelersSelect = document.getElementById('travelers');
         const packageSelect = document.getElementById('package');
+        const hotelSelect = document.getElementById('hotel');
+        const transportSelect = document.getElementById('transport');
         const bookButton = document.getElementById('bookNowBtn');
         const priceInput = document.getElementById('final_price');
+
+        // Hotel price multipliers (for 4 nights stay)
+        const hotelPrices = {
+            'basic': 400 * 4,
+            '3star': 1800 * 4,
+            '4star': 3500 * 4,
+            '5star': 7000 * 4,
+            'luxury': 10000 * 4
+        };
+
+        // Transport price multipliers
+        const transportPrices = {
+            'bus': 1200,
+            'air': 7500,
+            'private': 10000,
+            'jeep': 2500
+        };
+
+        // Package multipliers
+        const packageMultipliers = {
+            'basic': 1,
+            'standard': 1.3,
+            'premium': 1.6
+        };
 
         function updateLumbiniPrice() {
             const travelers = parseInt(travelersSelect.value) || 1;
             const packageType = packageSelect.value;
+            const hotelType = hotelSelect.value;
+            const transportType = transportSelect.value;
             
-            let packageMultiplier = 1;
-            if (packageType === 'standard') packageMultiplier = 1.3;
-            else if (packageType === 'premium') packageMultiplier = 1.6;
+            let packageMultiplier = packageMultipliers[packageType] || 1;
             
-            const totalPrice = Math.round(lumbiniBasePrice * travelers * packageMultiplier);
+            // Calculate base price
+            const basePrice = lumbiniBasePrice * travelers * packageMultiplier;
+            
+            // Add hotel cost
+            const hotelCost = (hotelPrices[hotelType] || 0) * travelers;
+            
+            // Add transport cost
+            const transportCost = (transportPrices[transportType] || 0) * travelers;
+            
+            // Total price
+            const totalPrice = Math.round(basePrice + hotelCost + transportCost);
+            
             bookButton.textContent = `Book Now - RS.${totalPrice.toLocaleString()}`;
             priceInput.value = totalPrice;
         }
 
         travelersSelect.addEventListener('change', updateLumbiniPrice);
         packageSelect.addEventListener('change', updateLumbiniPrice);
+        hotelSelect.addEventListener('change', updateLumbiniPrice);
+        transportSelect.addEventListener('change', updateLumbiniPrice);
 
         // Set minimum date to today
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('start_date').min = today;
-        document.getElementById('end_date').min = today;
 
-        // Update end date min when start date changes
+        // Automatically calculate end date (5 days after start date)
         document.getElementById('start_date').addEventListener('change', function() {
-            document.getElementById('end_date').min = this.value;
+            if (this.value) {
+                const startDate = new Date(this.value);
+                const endDate = new Date(startDate);
+                // Add 4 nights/5 days (itinerary shows Day 1 to Day 5)
+                endDate.setDate(endDate.getDate() + 4);
+                
+                // Format to YYYY-MM-DD
+                const endDateString = endDate.toISOString().split('T')[0];
+                document.getElementById('end_date').value = endDateString;
+                
+                // Update price based on new dates if needed
+                updateLumbiniPrice();
+            }
         });
 
         // Check URL for success/error parameters
@@ -678,6 +758,9 @@
             document.getElementById('errorMessage').style.display = 'block';
             document.getElementById('errorMessage').scrollIntoView({ behavior: 'smooth' });
         }
+
+        // Initialize price calculation
+        updateLumbiniPrice();
     </script>
-</body>       
+</body>
 </html>
