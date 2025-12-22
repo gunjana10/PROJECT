@@ -16,9 +16,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         // Check if password matches (plain text comparison)
         if ($password == $user['password']) {
-            // Set session variables
+            // Set session variables - FIXED: ADD EMAIL
             $_SESSION['id'] = $user['id'];
             $_SESSION['fullname'] = $user['fullname'];
+            $_SESSION['email'] = $user['email'];  // THIS LINE WAS MISSING
             $_SESSION['role'] = $user['role'];
             
             // Redirect based on role
@@ -51,7 +52,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            /* OPTION 3: Warm Light Grey */
             background: #f8f9fa;
             background-image: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
             min-height: 100vh;
@@ -132,23 +132,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             font-size: 12px;
             margin-top: 5px;
             display: none;
-        }
-        
-        .password-wrapper {
-            position: relative;
-        }
-        
-        .toggle-password {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: #666;
-            cursor: pointer;
-            padding: 0;
-            font-size: 18px;
         }
         
         .server-error {
@@ -239,17 +222,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 <div class="input-group">
                     <label for="password">Password</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="password" name="password" 
-                               placeholder="Enter your password" 
-                               required>
-                        <button type="button" class="toggle-password" id="togglePassword"> </button>
-                    </div>
+                    <input type="password" id="password" name="password" 
+                           placeholder="Enter your password" 
+                           required>
                     <div class="error-message" id="passwordError">Password is required</div>
                 </div>
-                 <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
+                
+                <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
             </form>
-                       
+            
             <div class="links">
                 Don't have an account? <a href="signup.php">Create Account</a>
             </div>
@@ -262,35 +243,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         const email = document.getElementById('email');
         const password = document.getElementById('password');
         const submitBtn = document.getElementById('submitBtn');
-        const toggleBtn = document.getElementById('togglePassword');
         
-        // Error elements
-        const emailError = document.getElementById('emailError');
-        const passwordError = document.getElementById('passwordError');
-        
-        // Toggle password visibility
-        toggleBtn.addEventListener('click', function() {
-            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-            password.setAttribute('type', type);
-            this.textContent = type === 'password';
-        });
-        
-        // Validation functions
+        // Form validation
         function validateEmail() {
             const value = email.value.trim();
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             
             if (!value) {
-                showError(email, emailError, 'Email is required');
                 return false;
             }
             
             if (!emailRegex.test(value)) {
-                showError(email, emailError, 'Please enter a valid email address');
                 return false;
             }
             
-            hideError(email, emailError);
             return true;
         }
         
@@ -298,45 +264,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             const value = password.value;
             
             if (!value) {
-                showError(password, passwordError, 'Password is required');
                 return false;
             }
             
-            hideError(password, passwordError);
             return true;
         }
-        
-        // Helper functions
-        function showError(input, errorElement, message) {
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
-            input.classList.add('error');
-            input.classList.remove('success');
-        }
-        
-        function hideError(input, errorElement) {
-            errorElement.style.display = 'none';
-            input.classList.remove('error');
-            input.classList.add('success');
-        }
-        
-        // Real-time validation
-        email.addEventListener('input', validateEmail);
-        email.addEventListener('blur', validateEmail);
-        
-        password.addEventListener('input', validatePassword);
-        password.addEventListener('blur', validatePassword);
-        
-        // Check form validity for submit button
-        function checkFormValidity() {
-            const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
-            const isPasswordValid = password.value.length >= 1;
-            
-            submitBtn.disabled = !(isEmailValid && isPasswordValid);
-        }
-        
-        // Check on input
-        form.addEventListener('input', checkFormValidity);
         
         // Form submission
         form.addEventListener('submit', function(e) {
@@ -345,13 +277,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             if (!isEmailValid || !isPasswordValid) {
                 e.preventDefault();
-                
-                if (!isEmailValid) {
-                    email.focus();
-                } else if (!isPasswordValid) {
-                    password.focus();
-                }
-                
+                alert('Please fill in all fields correctly');
                 return false;
             }
             
@@ -361,7 +287,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         });
         
         // Initialize
-        checkFormValidity();
         email.focus();
     </script>
 </body>

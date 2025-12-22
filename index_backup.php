@@ -1,3 +1,6 @@
+<?php
+include("db.php"); 
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     
   <style>
-    /* ---------- Global Styles ---------- */
+  
     * {
       margin: 0;
       padding: 0;
@@ -180,6 +183,7 @@
       display: flex;
       justify-content: center;
       margin-bottom: 30px;
+      position: relative;
     }
 
     .search-box input {
@@ -213,6 +217,43 @@
 
     .start-btn:hover {
       background-color: #ff7300;
+    }
+
+    /* NEW: Hero Search Suggestions Dropdown */
+    .search-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 350px;
+      background-color: white;
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      display: none;
+      z-index: 100;
+      margin-top: -5px;
+    }
+
+    .search-suggestion-item {
+      padding: 12px 15px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-suggestion-item:last-child {
+      border-bottom: none;
+    }
+
+    .search-suggestion-item:hover {
+      background-color: #f0faf7;
+      color: #004d4d;
+    }
+
+    .search-suggestion-item i {
+      color: #004d4d;
     }
 
     /* ------- Search Container ------- */
@@ -346,17 +387,7 @@
       object-fit: cover;
     }
 
-    .rating {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 20px;
-      font-size: 0.9rem;
-      color: #555;
-    }
-
+    /* REMOVED RATING STYLES */
     .card-content {
       padding: 20px;
     }
@@ -642,6 +673,11 @@
       .search-box input {
         width: 80%;
       }
+      .search-suggestions {
+        width: 80%;
+        left: 10%;
+        transform: none;
+      }
       .search-bar {
         flex-direction: column;
       }
@@ -791,7 +827,7 @@
     <div class="logo">TripNext</div>
     <nav>
       <ul>
-        <li><a href="index.html">Home</a></li>
+        <li><a href="index.php">Home</a></li>
         
         <!-- Destinations Dropdown -->
         <li class="dropdown">
@@ -821,16 +857,35 @@
       <h1>Your Next Adventure Awaits</h1>
       <p>Discover breathtaking destinations, plan unforgettable trips, and create memories that last a lifetime.</p> <br> <br>
       <div class="search-box">
-        <input type="text" placeholder="Where do you want to go?">
-        <button>🔍</button>
+        <input type="text" id="heroSearch" placeholder="Where do you want to go?">
+        <button id="heroSearchBtn">🔍</button>
+        <!-- NEW: Search Suggestions Dropdown -->
+        <div class="search-suggestions" id="searchSuggestions">
+          <div class="search-suggestion-item" data-destination="Pokhara">
+            <i class="fa fa-map-marker"></i>
+            <span>Pokhara</span>
+          </div>
+          <div class="search-suggestion-item" data-destination="Chitwan">
+            <i class="fa fa-map-marker"></i>
+            <span>Chitwan National Park</span>
+          </div>
+          <div class="search-suggestion-item" data-destination="Lumbini">
+            <i class="fa fa-map-marker"></i>
+            <span>Lumbini</span>
+          </div>
+          <div class="search-suggestion-item" data-destination="Annapurna">
+            <i class="fa fa-map-marker"></i>
+            <span>Annapurna Circuit</span>
+          </div>
+        </div>
       </div>
-      <button class="start-btn">Start Your Adventure</button>
+      <button class="start-btn" id="heroStartBtn">Start Your Adventure</button>
     </div>
   </section>
   
   <!-- Search Container -->
   <div class="search-container">
-    <h2>Where do you want to go?</h2>
+    <h2>Plan Your Trip</h2>
     <div class="search-bar">
       <!-- Start Date -->
       <div class="search-field">
@@ -850,7 +905,7 @@
         </div>
       </div>
       
-      <!-- Destination Dropdown -->
+      
       <div class="search-field">
         <label for="destination">Destination</label>
         <div class="search-field-input">
@@ -858,9 +913,9 @@
           <select id="destination">
             <option value="">Select Destination</option>
             <option value="Pokhara">Pokhara</option>
-            <option value="Chitwan">Chitwan</option>
+            <option value="Chitwan">Chitwan National Park</option>
             <option value="Lumbini">Lumbini</option>
-            <option value="Annapurna">Annapurna</option>
+            <option value="Annapurna">Annapurna Circuit</option>
           </select>
         </div>
       </div>
@@ -876,12 +931,12 @@
       </div>
       
       <div class="destination-cards-results" id="destinationCardsResults">
-        <!-- Results will be populated here by JavaScript -->
+     
       </div>
     </div>
   </div>
 
-  <!-- Explore Section -->
+  
   <section class="explore-section">
     <h2>Explore Nepal</h2>
     <p>Discover the breathtaking beauty and spiritual richness of Nepal's most iconic destinations</p>
@@ -890,7 +945,6 @@
       <!-- Lumbini -->
       <div class="card">
         <img src="images/lumbini.jpg" alt="Lumbini">
-        <div class="rating">⭐ 4.9</div>
         <div class="card-content">
           <h3>Lumbini</h3>
           <p>Birthplace of Lord Buddha, UNESCO World Heritage Site</p>
@@ -902,7 +956,6 @@
       <!-- Chitwan National Park -->
       <div class="card">
         <img src="images/chitwan.jpg" alt="Chitwan National Park">
-        <div class="rating">⭐ 4.8</div>
         <div class="card-content">
           <h3>Chitwan National Park</h3>
           <p>Wildlife safari and jungle adventures</p>
@@ -914,7 +967,6 @@
       <!-- Annapurna Base Camp -->
       <div class="card">
         <img src="images/arnapurna.jpg" alt="Annapurna Base Camp">
-        <div class="rating">⭐ 4.9</div>
         <div class="card-content">
           <h3>Annapurna Base Camp (ABC)</h3>
           <p>Stunning mountain views and trekking paradise</p>
@@ -926,7 +978,6 @@
        <!-- Pokhara -->
       <div class="card">
         <img src="images/pokhara.jpg" alt="Pokhara">
-        <div class="rating">⭐ 4.7</div>
         <div class="card-content">
           <h3>Pokhara</h3>
           <p>Stunning mountain views and trekking paradise</p>
@@ -971,7 +1022,7 @@
     <p>Join thousands of travelers who trust TripNext to make their dream trips a reality</p>
     
     <div class="button-container">
-      <a href="#" class="btn-primary">Sign Up Free</a>
+      <a href="signup.php" class="btn-primary">Sign Up Free</a>
       <a href="#" class="btn-outline">Learn More</a>
     </div>
   </section>
@@ -1028,46 +1079,166 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      const heroSearchInput = document.getElementById('heroSearch');
+      const heroSearchBtn = document.getElementById('heroSearchBtn');
+      const heroStartBtn = document.getElementById('heroStartBtn');
+      const searchSuggestions = document.getElementById('searchSuggestions');
       const searchButton = document.getElementById('searchButton');
       const searchResults = document.getElementById('searchResults');
       const destinationCardsResults = document.getElementById('destinationCardsResults');
       const resultsCount = document.getElementById('resultsCount');
       
-      // Set minimum date to today
+      
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('startDate').min = today;
       document.getElementById('endDate').min = today;
       
-      // Update end date min when start date changes
+
       document.getElementById('startDate').addEventListener('change', function() {
         document.getElementById('endDate').min = this.value;
       });
       
-      // Destination data for Nepal with page links
       const destinations = {
         "Pokhara": {
           name: "Pokhara",
           price: "RS.23,880",
-          page: "pokhara.html"
+          page: "pokhara.html",
+          description: "Stunning mountain views and trekking paradise",
+          image: "images/pokhara.jpg"
         },
         "Chitwan": {
           name: "Chitwan National Park",
           price: "RS.35,880",
-          page: "chitwan.html"
+          page: "chitwan.html",
+          description: "Wildlife safari and jungle adventures",
+          image: "images/chitwan.jpg"
         },
         "Lumbini": {
           name: "Lumbini",
           price: "RS.21,480",
-          page: "lumbini.html"
+          page: "lumbini.html",
+          description: "Birthplace of Lord Buddha, UNESCO World Heritage Site",
+          image: "images/lumbini.jpg"
         },
         "Annapurna": {
           name: "Annapurna Circuit",
           price: "RS.13,850",
-          page: "annapurna.html"
+          page: "annapurna.html",
+          description: "Stunning mountain views and trekking paradise",
+          image: "images/arnapurna.jpg"
         }
       };
       
-      // Handle search button click
+      // Show search suggestions when hero search input is focused
+      heroSearchInput.addEventListener('focus', function() {
+        searchSuggestions.style.display = 'block';
+      });
+      
+      // Hide search suggestions when clicking outside
+      document.addEventListener('click', function(event) {
+        if (!heroSearchInput.contains(event.target) && !searchSuggestions.contains(event.target)) {
+          searchSuggestions.style.display = 'none';
+        }
+      });
+      
+      // Handle click on search suggestion items
+      document.querySelectorAll('.search-suggestion-item').forEach(item => {
+        item.addEventListener('click', function() {
+          const destination = this.getAttribute('data-destination');
+          heroSearchInput.value = this.querySelector('span').textContent;
+          searchSuggestions.style.display = 'none';
+          
+          // Scroll to search container
+          document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+          
+          // Set the dropdown value
+          document.getElementById('destination').value = destination;
+          
+          // Show results after a short delay
+          setTimeout(() => {
+            searchButton.click();
+          }, 300);
+        });
+      });
+      
+      // Handle Hero Section search button click
+      heroSearchBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const searchTerm = heroSearchInput.value.trim().toLowerCase();
+        
+        if (!searchTerm) {
+          alert('Please enter a destination name (e.g., Pokhara, Chitwan, Lumbini, Annapurna)');
+          return;
+        }
+        
+        // Scroll to search container
+        document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+        
+        // Find matching destination
+        let matchedDestination = '';
+        
+        // Check for exact matches first
+        for (const key in destinations) {
+          const dest = destinations[key];
+          const destName = dest.name.toLowerCase();
+          
+          if (destName.includes(searchTerm) || key.toLowerCase() === searchTerm) {
+            matchedDestination = key;
+            break;
+          }
+        }
+        
+       
+        if (!matchedDestination) {
+          for (const key in destinations) {
+            const dest = destinations[key];
+            const destName = dest.name.toLowerCase();
+            
+            // Check for partial word matches
+            const destWords = destName.split(' ');
+            const searchWords = searchTerm.split(' ');
+            
+            for (const searchWord of searchWords) {
+              for (const destWord of destWords) {
+                if (destWord.startsWith(searchWord) || destWord.includes(searchWord)) {
+                  matchedDestination = key;
+                  break;
+                }
+              }
+              if (matchedDestination) break;
+            }
+            if (matchedDestination) break;
+          }
+        }
+        
+        // Set the dropdown to matched destination
+        if (matchedDestination) {
+          document.getElementById('destination').value = matchedDestination;
+          
+          // Show results after a short delay
+          setTimeout(() => {
+            searchButton.click();
+          }, 300);
+        } else {
+          alert('Destination not found. Please try: Pokhara, Chitwan, Lumbini, or Annapurna');
+          document.getElementById('destination').value = '';
+        }
+      });
+      
+      // Handle Enter key in hero search input
+      heroSearchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          heroSearchBtn.click();
+        }
+      });
+      
+      // Handle Hero Section "Start Your Adventure" button click
+      heroStartBtn.addEventListener('click', function() {
+        document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+      });
+      
+      // Handle search button click in the search container
       searchButton.addEventListener('click', function(e) {
         e.preventDefault();
         
@@ -1075,7 +1246,7 @@
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         
-        // Validate dates
+        // Validate dates if provided
         if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
           alert('End date must be after start date');
           return;
@@ -1083,7 +1254,7 @@
         
         // Validate destination
         if (!destination) {
-          alert('Please select a destination');
+          alert('Please select a destination from the list');
           return;
         }
         
@@ -1097,34 +1268,44 @@
         // Clear previous results
         destinationCardsResults.innerHTML = '';
         
-        // Display results
+        let count = 0;
+        
         if (destination && destinations[destination]) {
+          // Show specific destination - SIMPLE CARD LIKE IN EXPLORE SECTION
           const dest = destinations[destination];
-          
-          const card = document.createElement('div');
-          card.className = 'destination-card-result';
-          card.innerHTML = `
-            <h3 class="card-title-result">${dest.name}</h3>
-            <p class="card-dates-result">📅 ${formattedStartDate} - ${formattedEndDate}</p>
-            <p class="card-price-result">${dest.price}</p>
-            <a href="${dest.page}" class="card-button-result">Book Now</a>
-          `;
-          destinationCardsResults.appendChild(card);
-          
-          resultsCount.textContent = "1 destination found";
+          createDestinationCard(dest, formattedStartDate, formattedEndDate);
+          count++;
         } else {
+          // No destination selected
           destinationCardsResults.innerHTML = `
             <div class="no-results">
               <i>✈️</i>
-              <p>Please select one of the available destinations from the dropdown</p>
+              <p>Please select a destination from the dropdown list</p>
             </div>
           `;
-          resultsCount.textContent = "0 destinations found";
         }
+        
+        // Update results count
+        resultsCount.textContent = `${count} destination found`;
         
         // Scroll to results
         searchResults.scrollIntoView({ behavior: 'smooth' });
       });
+      
+      // Function to create SIMPLE destination card (like in Explore section)
+      function createDestinationCard(dest, startDate, endDate) {
+        const card = document.createElement('div');
+        card.className = 'destination-card-result';
+        
+        card.innerHTML = `
+          <h3 class="card-title-result">${dest.name}</h3>
+          <p class="card-dates-result">📅 ${startDate || "Any date"} - ${endDate || "Any date"}</p>
+          <p>${dest.description}</p>
+          <p class="card-price-result">Starting from ${dest.price}</p>
+          <a href="${dest.page}" class="card-button-result">View Details</a>
+        `;
+        destinationCardsResults.appendChild(card);
+      }
       
       // Helper function to format date as mm/dd/yyyy
       function formatDate(dateString) {

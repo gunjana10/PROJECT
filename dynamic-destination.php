@@ -1,9 +1,45 @@
+<?php
+// dynamic-destination.php
+session_start();
+include("db.php");
+
+// Get destination name from URL
+$name = isset($_GET['name']) ? mysqli_real_escape_string($conn, $_GET['name']) : '';
+
+// Fetch destination details
+$query = "SELECT * FROM destinations WHERE name = '$name'";
+$result = mysqli_query($conn, $query);
+$destination = mysqli_fetch_assoc($result);
+
+// If destination not found, redirect to homepage
+if (!$destination) {
+    header("Location: index.php");
+    exit();
+}
+
+// Parse itinerary and other fields
+$itinerary = !empty($destination['itinerary']) ? json_decode($destination['itinerary'], true) : [];
+$included_services = !empty($destination['included_services']) ? explode("\n", $destination['included_services']) : [];
+$not_included = !empty($destination['not_included']) ? explode("\n", $destination['not_included']) : [];
+$hotel_options = !empty($destination['hotel_options']) ? explode("\n", $destination['hotel_options']) : ['Basic Hotel', '3-Star Hotel', '4-Star Hotel'];
+$transport_options = !empty($destination['transport_options']) ? explode("\n", $destination['transport_options']) : ['Bus', 'Flight', 'Private Vehicle'];
+
+// Get duration, difficulty, best season from database
+$duration = !empty($destination['duration']) ? $destination['duration'] : '5 Days';
+$difficulty = !empty($destination['difficulty']) ? $destination['difficulty'] : 'Easy';
+$best_season = !empty($destination['best_season']) ? $destination['best_season'] : 'Year-Round';
+$highlights = !empty($destination['highlights']) ? explode(',', $destination['highlights']) : [];
+
+// Calculate base price from "RS.XX,XXX" format
+$price_raw = $destination['price'];
+$base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'], '', $price_raw));
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumbini - Explore Nepal</title>
+    <title><?php echo htmlspecialchars($destination['name']); ?> - Explore Nepal</title>
     <style>
         * {
             margin: 0;
@@ -92,19 +128,6 @@
             text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.5);
         }
 
-        .rating {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: linear-gradient(135deg, #ffd700, #ffed4e);
-            padding: 8px 20px;
-            border-radius: 25px;
-            margin-top: 15px;
-            font-weight: 600;
-            color: #8e6c0a;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
         .price-tag {
             background: rgba(255, 255, 255, 0.9);
             color: #1e5799;
@@ -138,11 +161,6 @@
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .introduction-card h2::before {
-            content: '🕉️';
-            font-size: 1.5rem;
         }
 
         .introduction-card p {
@@ -185,11 +203,6 @@
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .stats-card h2::before {
-            content: '📊';
-            font-size: 1.5rem;
         }
 
         .stats-grid {
@@ -473,48 +486,50 @@
         
         <!-- Hero Header with Image -->
         <div class="hero-header">
-            <img src="images/lumbini.jpg" alt="Lumbini - Birthplace of Buddha" class="hero-image">
+            <img src="<?php echo htmlspecialchars($destination['image_url']); ?>" 
+                 alt="<?php echo htmlspecialchars($destination['name']); ?>" 
+                 class="hero-image"
+                 onerror="this.src='https://via.placeholder.com/1200x400/1e5799/ffffff?text=<?php echo urlencode($destination['name']); ?>'">
             <div class="hero-content">
-                <h1>Lumbini</h1>
-                <p>Birthplace of Lord Buddha • UNESCO World Heritage</p>
-                <div class="rating">⭐ 4.9/5 Excellent</div>
-                <div class="price-tag">From RS.21,480</div>
+                <h1><?php echo htmlspecialchars($destination['name']); ?></h1>
+                <p><?php echo htmlspecialchars($destination['description']); ?></p>
+                <div class="price-tag">From <?php echo htmlspecialchars($destination['price']); ?></div>
             </div>
         </div>
 
         <!-- Hero Section -->
         <div class="hero-section">
             <div class="introduction-card">
-                <h2>Sacred Birthplace</h2>
-                <p>Discover the profound spiritual energy of Lumbini, where Prince Siddhartha Gautama - the Buddha - was born. This UNESCO World Heritage Site offers a serene atmosphere perfect for meditation, reflection, and spiritual awakening.</p>
+                <h2>Destination Overview</h2>
+                <p><?php echo nl2br(htmlspecialchars($destination['package_details'])); ?></p>
                 
+                <?php if (!empty($included_services)): ?>
                 <div class="highlights-grid">
-                    <div class="highlight-item">🕉️ Maya Devi Temple</div>
-                    <div class="highlight-item">🏛️ Ashoka Pillar</div>
-                    <div class="highlight-item">🕌 International Monasteries</div>
-                    <div class="highlight-item">🌿 Sacred Garden</div>
-                    <div class="highlight-item">🕊️ Peaceful Atmosphere</div>
-                    <div class="highlight-item">📜 Ancient History</div>
+                    <?php foreach ($included_services as $service): 
+                        if (trim($service)): ?>
+                    <div class="highlight-item">✅ <?php echo htmlspecialchars(trim($service)); ?></div>
+                    <?php endif; endforeach; ?>
                 </div>
+                <?php endif; ?>
             </div>
 
             <div class="stats-card">
-                <h2>Pilgrimage Overview</h2>
+                <h2>Trip Information</h2>
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <div class="stat-number">5</div>
-                        <div class="stat-label">Days Journey</div>
+                        <div class="stat-number"><?php echo count($itinerary); ?> Days</div>
+                        <div class="stat-label">Duration</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number">623 BC</div>
-                        <div class="stat-label">Historical Year</div>
+                        <div class="stat-number"><?php echo htmlspecialchars($destination['price']); ?></div>
+                        <div class="stat-label">Starting Price</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number">Easy</div>
+                        <div class="stat-number"><?php echo htmlspecialchars($difficulty); ?></div>
                         <div class="stat-label">Difficulty Level</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number">Mar-Nov</div>
+                        <div class="stat-number"><?php echo htmlspecialchars($best_season); ?></div>
                         <div class="stat-label">Best Season</div>
                     </div>
                 </div>
@@ -523,34 +538,30 @@
 
         <!-- Content Section -->
         <div class="content-section">
+            <?php if (!empty($itinerary)): ?>
             <div class="itinerary-card">
-                <h3>Spiritual Journey Itinerary</h3>
+                <h3>Journey Itinerary</h3>
+                <?php foreach ($itinerary as $day): ?>
                 <div class="itinerary-day">
-                    <h4>Day 1: Arrival in Kathmandu</h4>
-                    <p>Welcome to Nepal! Arrive at Tribhuvan International Airport, transfer to your hotel, and rest after your journey. Evening orientation about your spiritual pilgrimage.</p>
+                    <h4><?php echo htmlspecialchars($day['title']); ?></h4>
+                    <p><?php echo htmlspecialchars($day['description']); ?></p>
                 </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="itinerary-card">
+                <h3>Journey Itinerary</h3>
                 <div class="itinerary-day">
-                    <h4>Day 2: Fly to Bhairahawa & Transfer to Lumbini</h4>
-                    <p>Morning scenic flight to Bhairahawa, then drive to the sacred land of Lumbini. Visit the Maya Devi Temple marking Buddha's exact birthplace.</p>
-                </div>
-                <div class="itinerary-day">
-                    <h4>Day 3: Explore Sacred Sites</h4>
-                    <p>Full day exploring international monasteries, the sacred garden, and archaeological sites. Visit the ancient Ashoka Pillar from 249 BC.</p>
-                </div>
-                <div class="itinerary-day">
-                    <h4>Day 4: Return to Kathmandu</h4>
-                    <p>Morning flight back to Kathmandu with spiritual insights. Free time for shopping or additional sightseeing. Farewell dinner with cultural program.</p>
-                </div>
-                <div class="itinerary-day">
-                    <h4>Day 5: Departure</h4>
-                    <p>Transfer to airport for departure, carrying profound spiritual memories and inner peace from your Lumbini pilgrimage.</p>
+                    <h4>Custom Itinerary</h4>
+                    <p>Contact us for a personalized itinerary for your journey to <?php echo htmlspecialchars($destination['name']); ?>.</p>
                 </div>
             </div>
+            <?php endif; ?>
 
             <div class="booking-card">
-                <h3>Book Your Pilgrimage</h3>
-                <form method="POST" action="process-booking.php" id="lumbini-booking-form">
-                    <input type="hidden" name="destination" value="Lumbini">
+                <h3>Book Your Journey</h3>
+                <form method="POST" action="process-booking.php" id="booking-form">
+                    <input type="hidden" name="destination" value="<?php echo htmlspecialchars($destination['name']); ?>">
                     
                     <div class="form-group">
                         <label for="full_name">Full Name *</label>
@@ -568,12 +579,12 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="start_date">Pilgrimage Start Date *</label>
+                        <label for="start_date">Start Date *</label>
                         <input type="date" id="start_date" name="start_date" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="end_date">Pilgrimage End Date *</label>
+                        <label for="end_date">End Date *</label>
                         <input type="date" id="end_date" name="end_date" required readonly>
                     </div>
                     
@@ -581,54 +592,64 @@
                         <label for="travelers">Number of Travelers *</label>
                         <select id="travelers" name="travelers" required>
                             <option value="">Select travelers</option>
-                            <option value="1">1 Person</option>
-                            <option value="2">2 People</option>
-                            <option value="3">3 People</option>
-                            <option value="4">4 People</option>
-                            <option value="5">5+ People</option>
+                            <?php for ($i = 1; $i <= 10; $i++): ?>
+                            <option value="<?php echo $i; ?>"><?php echo $i; ?> Person<?php echo $i > 1 ? 's' : ''; ?></option>
+                            <?php endfor; ?>
+                            <option value="11">11+ People</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
-                        <label for="package">Pilgrimage Package *</label>
+                        <label for="package">Package *</label>
                         <select id="package" name="package" required>
-                            <option value="basic">Basic Pilgrimage (RS.21,480)</option>
-                            <option value="standard">Standard Package (RS.28,500)</option>
-                            <option value="premium">Premium Experience (RS.35,000)</option>
+                            <option value="basic">Basic Package (<?php echo htmlspecialchars($destination['price']); ?>)</option>
+                            <option value="standard">Standard Package (<?php 
+                                $standard_price = $base_price * 1.3;
+                                echo 'RS.' . number_format($standard_price);
+                            ?>)</option>
+                            <option value="premium">Premium Experience (<?php 
+                                $premium_price = $base_price * 1.6;
+                                echo 'RS.' . number_format($premium_price);
+                            ?>)</option>
                         </select>
                     </div>
                     
-                    <!-- Hotel Options -->
                     <div class="form-group">
                         <label for="hotel">Hotel Category *</label>
                         <select id="hotel" name="hotel" required>
-                            <option value="basic">Basic Hotel</option>
-                            <option value="3star">3-Star Hotel</option>
-                            <option value="4star">4-Star Hotel</option>
-                            <option value="5star">5-Star Hotel</option>
-                            <option value="luxury">Luxury Resort</option>
+                            <option value="">Select hotel category</option>
+                            <?php foreach ($hotel_options as $hotel): 
+                                if (trim($hotel)): ?>
+                            <option value="<?php echo htmlspecialchars(strtolower(str_replace(' ', '_', trim($hotel)))); ?>">
+                                <?php echo htmlspecialchars(trim($hotel)); ?>
+                            </option>
+                            <?php endif; endforeach; ?>
                         </select>
                     </div>
                     
-                    <!-- Transport Options -->
                     <div class="form-group">
                         <label for="transport">Transport Type *</label>
                         <select id="transport" name="transport" required>
-                            <option value="bus">Bus</option>
-                            <option value="air">Flight</option>
-                            <option value="private">Private Vehicle</option>
-                            <option value="jeep">Jeep</option>
+                            <option value="">Select transport type</option>
+                            <?php foreach ($transport_options as $transport): 
+                                if (trim($transport)): ?>
+                            <option value="<?php echo htmlspecialchars(strtolower(trim($transport))); ?>">
+                                <?php echo htmlspecialchars(trim($transport)); ?>
+                            </option>
+                            <?php endif; endforeach; ?>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="special_requests">Special Requests</label>
-                        <textarea id="special_requests" name="special_requests" placeholder="Any spiritual requirements, meditation preferences, or additional requests..."></textarea>
+                        <textarea id="special_requests" name="special_requests" placeholder="Any special requirements or additional requests..."></textarea>
                     </div>
                     
-                    <input type="hidden" id="final_price" name="price" value="21480">
+                    <input type="hidden" id="final_price" name="price" value="<?php echo $base_price; ?>">
                     
-                    <button type="submit" class="book-now-btn" id="bookNowBtn">Book Now - RS.21,480</button>
+                    <button type="submit" class="book-now-btn" id="bookNowBtn">
+                        Book Now - <?php echo htmlspecialchars($destination['price']); ?>
+                    </button>
                 </form>
             </div>
         </div>
@@ -655,19 +676,19 @@
                 </div>
                 <div class="policy-item">
                     <h4>📞 Support</h4>
-                    <p>+977-9765340620</p>
+                    <p>+977-9849086473</p>
                 </div>
                 <div class="policy-item">
                     <h4>📧 Email</h4>
-                    <p>tripnext@explorenepal.com</p>
+                    <p>info@tripnest.com</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Dynamic pricing based on number of travelers, package, hotel, and transport
-        const lumbiniBasePrice = 21480;
+        // Base price from PHP
+        const basePrice = <?php echo $base_price; ?>;
         const travelersSelect = document.getElementById('travelers');
         const packageSelect = document.getElementById('package');
         const hotelSelect = document.getElementById('hotel');
@@ -675,8 +696,13 @@
         const bookButton = document.getElementById('bookNowBtn');
         const priceInput = document.getElementById('final_price');
 
-        // Hotel price multipliers (for 4 nights stay)
+        // Hotel price multipliers (per night, 4 nights stay)
         const hotelPrices = {
+            'basic_hotel': 400 * 4,
+            '3-star_hotel': 1800 * 4,
+            '4-star_hotel': 3500 * 4,
+            '5-star_hotel': 7000 * 4,
+            'luxury_resort': 10000 * 4,
             'basic': 400 * 4,
             '3star': 1800 * 4,
             '4star': 3500 * 4,
@@ -687,9 +713,10 @@
         // Transport price multipliers
         const transportPrices = {
             'bus': 1200,
-            'air': 7500,
-            'private': 10000,
-            'jeep': 2500
+            'flight': 7500,
+            'private_vehicle': 10000,
+            'jeep': 2500,
+            'private': 10000
         };
 
         // Package multipliers
@@ -699,7 +726,7 @@
             'premium': 1.6
         };
 
-        function updateLumbiniPrice() {
+        function updatePrice() {
             const travelers = parseInt(travelersSelect.value) || 1;
             const packageType = packageSelect.value;
             const hotelType = hotelSelect.value;
@@ -708,7 +735,7 @@
             let packageMultiplier = packageMultipliers[packageType] || 1;
             
             // Calculate base price
-            const basePrice = lumbiniBasePrice * travelers * packageMultiplier;
+            const calculatedBasePrice = basePrice * travelers * packageMultiplier;
             
             // Add hotel cost
             const hotelCost = (hotelPrices[hotelType] || 0) * travelers;
@@ -717,35 +744,36 @@
             const transportCost = (transportPrices[transportType] || 0) * travelers;
             
             // Total price
-            const totalPrice = Math.round(basePrice + hotelCost + transportCost);
+            const totalPrice = Math.round(calculatedBasePrice + hotelCost + transportCost);
             
             bookButton.textContent = `Book Now - RS.${totalPrice.toLocaleString()}`;
             priceInput.value = totalPrice;
         }
 
-        travelersSelect.addEventListener('change', updateLumbiniPrice);
-        packageSelect.addEventListener('change', updateLumbiniPrice);
-        hotelSelect.addEventListener('change', updateLumbiniPrice);
-        transportSelect.addEventListener('change', updateLumbiniPrice);
+        travelersSelect.addEventListener('change', updatePrice);
+        packageSelect.addEventListener('change', updatePrice);
+        hotelSelect.addEventListener('change', updatePrice);
+        transportSelect.addEventListener('change', updatePrice);
 
         // Set minimum date to today
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('start_date').min = today;
 
-        // Automatically calculate end date (5 days after start date)
+        // Automatically calculate end date (based on itinerary length)
         document.getElementById('start_date').addEventListener('change', function() {
             if (this.value) {
                 const startDate = new Date(this.value);
                 const endDate = new Date(startDate);
-                // Add 4 nights/5 days (itinerary shows Day 1 to Day 5)
-                endDate.setDate(endDate.getDate() + 4);
+                // Add days based on itinerary length (default 4 nights/5 days)
+                const itineraryDays = <?php echo max(count($itinerary) - 1, 4); ?>;
+                endDate.setDate(endDate.getDate() + itineraryDays);
                 
                 // Format to YYYY-MM-DD
                 const endDateString = endDate.toISOString().split('T')[0];
                 document.getElementById('end_date').value = endDateString;
                 
                 // Update price based on new dates if needed
-                updateLumbiniPrice();
+                updatePrice();
             }
         });
 
@@ -760,7 +788,7 @@
         }
 
         // Initialize price calculation
-        updateLumbiniPrice();
+        updatePrice();
     </script>
 </body>
 </html>

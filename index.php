@@ -10,7 +10,6 @@ include("db.php");
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     
   <style>
-  
     * {
       margin: 0;
       padding: 0;
@@ -387,7 +386,7 @@ include("db.php");
       object-fit: cover;
     }
 
-    /* REMOVED RATING STYLES */
+    /* NO RATING STYLES - REMOVED */
     .card-content {
       padding: 20px;
     }
@@ -408,6 +407,7 @@ include("db.php");
       font-weight: bold;
       color: #003c30;
       margin-top: 10px;
+      font-size: 1.1rem;
     }
 
     .btn {
@@ -419,6 +419,7 @@ include("db.php");
       border-radius: 6px;
       cursor: pointer;
       transition: background-color 0.3s ease;
+      display: inline-block;
     }
 
     .btn:hover {
@@ -836,7 +837,7 @@ include("db.php");
             <a href="pokhara.html">Pokhara</a>
             <a href="chitwan.html">Chitwan National Park</a>
             <a href="lumbini.html">Lumbini</a>
-            <a href="annapurna.html">Annapurna Circuit</a>
+            <a href="annapurna.html">Annapurna Base Camp(ABC)</a>
           </div>
         </li>
         
@@ -859,24 +860,9 @@ include("db.php");
       <div class="search-box">
         <input type="text" id="heroSearch" placeholder="Where do you want to go?">
         <button id="heroSearchBtn">🔍</button>
-        <!-- NEW: Search Suggestions Dropdown -->
+        <!-- Search Suggestions Dropdown -->
         <div class="search-suggestions" id="searchSuggestions">
-          <div class="search-suggestion-item" data-destination="Pokhara">
-            <i class="fa fa-map-marker"></i>
-            <span>Pokhara</span>
-          </div>
-          <div class="search-suggestion-item" data-destination="Chitwan">
-            <i class="fa fa-map-marker"></i>
-            <span>Chitwan National Park</span>
-          </div>
-          <div class="search-suggestion-item" data-destination="Lumbini">
-            <i class="fa fa-map-marker"></i>
-            <span>Lumbini</span>
-          </div>
-          <div class="search-suggestion-item" data-destination="Annapurna">
-            <i class="fa fa-map-marker"></i>
-            <span>Annapurna Circuit</span>
-          </div>
+          <!-- Dynamic suggestions will be loaded here -->
         </div>
       </div>
       <button class="start-btn" id="heroStartBtn">Start Your Adventure</button>
@@ -905,17 +891,36 @@ include("db.php");
         </div>
       </div>
       
-      
+      <!-- Destination Dropdown -->
       <div class="search-field">
         <label for="destination">Destination</label>
         <div class="search-field-input">
           <i class="fa fa-map-marker"></i>
           <select id="destination">
             <option value="">Select Destination</option>
-            <option value="Pokhara">Pokhara</option>
-            <option value="Chitwan">Chitwan National Park</option>
-            <option value="Lumbini">Lumbini</option>
-            <option value="Annapurna">Annapurna Circuit</option>
+            <?php
+            // FIRST: Show static destinations (always show these)
+            $static_destinations = [
+                ['name' => 'Pokhara', 'page' => 'pokhara.html'],
+                ['name' => 'Chitwan National Park', 'page' => 'chitwan.html'],
+                ['name' => 'Lumbini', 'page' => 'lumbini.html'],
+                ['name' => 'Annapurna Circuit', 'page' => 'annapurna.html']
+            ];
+            
+            foreach ($static_destinations as $dest) {
+                echo '<option value="' . htmlspecialchars($dest['name']) . '">' . htmlspecialchars($dest['name']) . '</option>';
+            }
+            
+            // THEN: Show admin-added destinations from database
+            $dest_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit', 'Annapurna Base Camp (ABC)') ORDER BY name";
+            $dest_result = mysqli_query($conn, $dest_query);
+            
+            if ($dest_result && mysqli_num_rows($dest_result) > 0) {
+                while ($dest = mysqli_fetch_assoc($dest_result)) {
+                    echo '<option value="' . htmlspecialchars($dest['name']) . '">' . htmlspecialchars($dest['name']) . '</option>';
+                }
+            }
+            ?>
           </select>
         </div>
       </div>
@@ -931,60 +936,96 @@ include("db.php");
       </div>
       
       <div class="destination-cards-results" id="destinationCardsResults">
-     
+        <!-- Results will be displayed here -->
       </div>
     </div>
   </div>
 
-  
+  <!-- Explore Section - THIS IS THE KEY PART -->
   <section class="explore-section">
     <h2>Explore Nepal</h2>
     <p>Discover the breathtaking beauty and spiritual richness of Nepal's most iconic destinations</p>
 
     <div class="card-container">
-      <!-- Lumbini -->
-      <div class="card">
-        <img src="images/lumbini.jpg" alt="Lumbini">
-        <div class="card-content">
-          <h3>Lumbini</h3>
-          <p>Birthplace of Lord Buddha, UNESCO World Heritage Site</p>
-          <p class="price">From RS.21,480</p>
-          <button class="btn"><a href="lumbini.html" class="btn view-details-btn">View Details</a></button>
-        </div>
-      </div>
-
-      <!-- Chitwan National Park -->
-      <div class="card">
-        <img src="images/chitwan.jpg" alt="Chitwan National Park">
-        <div class="card-content">
-          <h3>Chitwan National Park</h3>
-          <p>Wildlife safari and jungle adventures</p>
-          <p class="price">From RS.35,880</p>
-          <button class="btn"><a href="chitwan.html" class="btn view-details-btn">View Details</a></button>
-        </div>
-      </div>
-
-      <!-- Annapurna Base Camp -->
-      <div class="card">
-        <img src="images/arnapurna.jpg" alt="Annapurna Base Camp">
-        <div class="card-content">
-          <h3>Annapurna Base Camp (ABC)</h3>
-          <p>Stunning mountain views and trekking paradise</p>
-          <p class="price">From RS.13,850</p>
-          <button class="btn"><a href="annapurna.html" class="btn view-details-btn">View Details</a></button>
-        </div>
-      </div>
-
-       <!-- Pokhara -->
-      <div class="card">
-        <img src="images/pokhara.jpg" alt="Pokhara">
-        <div class="card-content">
-          <h3>Pokhara</h3>
-          <p>Stunning mountain views and trekking paradise</p>
-          <p class="price">From RS.23,880</p>
-          <button class="btn"><a href="pokhara.html" class="btn view-details-btn">View Details</a></button>
-        </div>
-      </div>
+      <!-- FIRST: Show ALL 4 Static Destinations (Always show these) -->
+      <?php
+      // Static destinations data - NEVER REMOVE THESE
+      $static_destinations = [
+          [
+              'name' => 'Lumbini',
+              'description' => 'Birthplace of Lord Buddha, UNESCO World Heritage Site',
+              'price' => 'RS.21,480',
+              'image' => 'images/lumbini.jpg',
+              'page' => 'lumbini.html'
+          ],
+          [
+              'name' => 'Chitwan National Park',
+              'description' => 'Wildlife safari and jungle adventures',
+              'price' => 'RS.35,880',
+              'image' => 'images/chitwan.jpg',
+              'page' => 'chitwan.html'
+          ],
+          [
+              'name' => 'Annapurna Base Camp (ABC)',
+              'description' => 'Stunning mountain views and trekking paradise',
+              'price' => 'RS.13,850',
+              'image' => 'images/arnapurna.jpg',
+              'page' => 'annapurna.html'
+          ],
+          [
+              'name' => 'Pokhara',
+              'description' => 'Stunning mountain views and trekking paradise',
+              'price' => 'RS.23,880',
+              'image' => 'images/pokhara.jpg',
+              'page' => 'pokhara.html'
+          ]
+      ];
+      
+      // Display ALL static destinations first
+      foreach ($static_destinations as $dest) {
+          ?>
+          <div class="card">
+            <img src="<?php echo $dest['image']; ?>" alt="<?php echo htmlspecialchars($dest['name']); ?>">
+            <div class="card-content">
+              <h3><?php echo htmlspecialchars($dest['name']); ?></h3>
+              <p><?php echo htmlspecialchars($dest['description']); ?></p>
+              <p class="price">From <?php echo $dest['price']; ?></p>
+              <button class="btn">
+                <a href="<?php echo $dest['page']; ?>" class="view-details-btn">
+                  View Details
+                </a>
+              </button>
+            </div>
+          </div>
+          <?php
+      }
+      
+      // THEN: Show admin-added destinations (as extras)
+      $destinations_query = "SELECT * FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit', 'Annapurna Base Camp (ABC)') ORDER BY created_at DESC";
+      $destinations_result = mysqli_query($conn, $destinations_query);
+      
+      if ($destinations_result && mysqli_num_rows($destinations_result) > 0) {
+          while ($destination = mysqli_fetch_assoc($destinations_result)) {
+              ?>
+              <div class="card">
+                <img src="<?php echo htmlspecialchars($destination['image_url']); ?>" 
+                     alt="<?php echo htmlspecialchars($destination['name']); ?>"
+                     onerror="this.src='https://via.placeholder.com/400x300/004d4d/ffffff?text=<?php echo urlencode($destination['name']); ?>'">
+                <div class="card-content">
+                  <h3><?php echo htmlspecialchars($destination['name']); ?></h3>
+                  <p><?php echo htmlspecialchars($destination['description']); ?></p>
+                  <p class="price">From <?php echo htmlspecialchars($destination['price']); ?></p>
+                  <button class="btn">
+                    <a href="dynamic-destination.php?name=<?php echo urlencode($destination['name']); ?>" class="view-details-btn">
+                      View Details
+                    </a>
+                  </button>
+                </div>
+              </div>
+              <?php
+          }
+      }
+      ?>
     </div>
   </section>
 
@@ -1047,10 +1088,22 @@ include("db.php");
       <div class="footer-box">
         <h4>Destinations</h4>
         <ul>
-          <li>Pokhara</li>
-          <li>Chitwan</li>
-          <li>Kathmandu</li>
-          <li>Lumbini</li>
+          <?php
+          // Show static destinations in footer first
+          $footer_static = ['Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit'];
+          foreach ($footer_static as $dest_name) {
+              echo '<li>' . htmlspecialchars($dest_name) . '</li>';
+          }
+          
+          // Then show admin-added destinations
+          $footer_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit') LIMIT 4";
+          $footer_result = mysqli_query($conn, $footer_query);
+          if ($footer_result) {
+              while ($footer_dest = mysqli_fetch_assoc($footer_result)) {
+                  echo '<li>' . htmlspecialchars($footer_dest['name']) . '</li>';
+              }
+          }
+          ?>
         </ul>
       </div>
 
@@ -1088,17 +1141,8 @@ include("db.php");
       const destinationCardsResults = document.getElementById('destinationCardsResults');
       const resultsCount = document.getElementById('resultsCount');
       
-      
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('startDate').min = today;
-      document.getElementById('endDate').min = today;
-      
-
-      document.getElementById('startDate').addEventListener('change', function() {
-        document.getElementById('endDate').min = this.value;
-      });
-      
-      const destinations = {
+      // Define BOTH static and dynamic destinations
+      const staticDestinations = {
         "Pokhara": {
           name: "Pokhara",
           price: "RS.23,880",
@@ -1106,7 +1150,7 @@ include("db.php");
           description: "Stunning mountain views and trekking paradise",
           image: "images/pokhara.jpg"
         },
-        "Chitwan": {
+        "Chitwan National Park": {
           name: "Chitwan National Park",
           price: "RS.35,880",
           page: "chitwan.html",
@@ -1120,14 +1164,102 @@ include("db.php");
           description: "Birthplace of Lord Buddha, UNESCO World Heritage Site",
           image: "images/lumbini.jpg"
         },
-        "Annapurna": {
-          name: "Annapurna Circuit",
+        
+        "Annapurna Base Camp (ABC)": {
+          name: "Annapurna Base Camp (ABC)",
           price: "RS.13,850",
           page: "annapurna.html",
           description: "Stunning mountain views and trekking paradise",
           image: "images/arnapurna.jpg"
         }
       };
+      
+      let allDestinations = { ...staticDestinations }; // Start with static destinations
+      
+      // Fetch admin-added destinations and combine with static ones
+      fetch('get-destinations.php')
+        .then(response => response.json())
+        .then(adminDestinations => {
+          // Add admin destinations to the list (excluding static ones)
+          adminDestinations.forEach(dest => {
+            if (!staticDestinations[dest.name]) {
+              allDestinations[dest.name] = dest;
+            }
+          });
+          
+          // Update search suggestions
+          updateSearchSuggestions();
+          
+          // Update destination dropdown
+          updateDestinationDropdown();
+        })
+        .catch(error => {
+          console.error('Error loading admin destinations:', error);
+          // If fetch fails, just use static destinations
+          updateSearchSuggestions();
+          updateDestinationDropdown();
+        });
+      
+      // Function to update search suggestions
+      function updateSearchSuggestions() {
+        searchSuggestions.innerHTML = '';
+        
+        Object.keys(allDestinations).forEach(destName => {
+          const suggestion = document.createElement('div');
+          suggestion.className = 'search-suggestion-item';
+          suggestion.setAttribute('data-destination', destName);
+          suggestion.innerHTML = `
+            <i class="fa fa-map-marker"></i>
+            <span>${destName}</span>
+          `;
+          
+          suggestion.addEventListener('click', function() {
+            const destination = this.getAttribute('data-destination');
+            heroSearchInput.value = this.querySelector('span').textContent;
+            searchSuggestions.style.display = 'none';
+            
+            // Scroll to search container
+            document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+            
+            // Set the dropdown value
+            document.getElementById('destination').value = destination;
+            
+            // Show results after a short delay
+            setTimeout(() => {
+              searchButton.click();
+            }, 300);
+          });
+          
+          searchSuggestions.appendChild(suggestion);
+        });
+      }
+      
+      // Function to update destination dropdown
+      function updateDestinationDropdown() {
+        const destinationSelect = document.getElementById('destination');
+        // Clear existing options except first one
+        while (destinationSelect.options.length > 1) {
+          destinationSelect.remove(1);
+        }
+        
+        // Add all destinations
+        Object.keys(allDestinations).forEach(destName => {
+          const option = document.createElement('option');
+          option.value = destName;
+          option.textContent = destName;
+          destinationSelect.appendChild(option);
+        });
+      }
+      
+      // Set minimum dates
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('startDate').min = today;
+      document.getElementById('endDate').min = today;
+      
+      // Update end date minimum when start date changes
+      document.getElementById('startDate').addEventListener('change', function() {
+        document.getElementById('endDate').min = this.value;
+      });
       
       // Show search suggestions when hero search input is focused
       heroSearchInput.addEventListener('focus', function() {
@@ -1141,26 +1273,6 @@ include("db.php");
         }
       });
       
-      // Handle click on search suggestion items
-      document.querySelectorAll('.search-suggestion-item').forEach(item => {
-        item.addEventListener('click', function() {
-          const destination = this.getAttribute('data-destination');
-          heroSearchInput.value = this.querySelector('span').textContent;
-          searchSuggestions.style.display = 'none';
-          
-          // Scroll to search container
-          document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
-          
-          // Set the dropdown value
-          document.getElementById('destination').value = destination;
-          
-          // Show results after a short delay
-          setTimeout(() => {
-            searchButton.click();
-          }, 300);
-        });
-      });
-      
       // Handle Hero Section search button click
       heroSearchBtn.addEventListener('click', function(e) {
         e.preventDefault();
@@ -1168,7 +1280,7 @@ include("db.php");
         const searchTerm = heroSearchInput.value.trim().toLowerCase();
         
         if (!searchTerm) {
-          alert('Please enter a destination name (e.g., Pokhara, Chitwan, Lumbini, Annapurna)');
+          alert('Please enter a destination name');
           return;
         }
         
@@ -1179,20 +1291,20 @@ include("db.php");
         let matchedDestination = '';
         
         // Check for exact matches first
-        for (const key in destinations) {
-          const dest = destinations[key];
+        for (const key in allDestinations) {
+          const dest = allDestinations[key];
           const destName = dest.name.toLowerCase();
           
           if (destName.includes(searchTerm) || key.toLowerCase() === searchTerm) {
-            matchedDestination = key;
+            matchedDestination = dest.name;
             break;
           }
         }
         
-       
+        // If no exact match, try partial matches
         if (!matchedDestination) {
-          for (const key in destinations) {
-            const dest = destinations[key];
+          for (const key in allDestinations) {
+            const dest = allDestinations[key];
             const destName = dest.name.toLowerCase();
             
             // Check for partial word matches
@@ -1202,7 +1314,7 @@ include("db.php");
             for (const searchWord of searchWords) {
               for (const destWord of destWords) {
                 if (destWord.startsWith(searchWord) || destWord.includes(searchWord)) {
-                  matchedDestination = key;
+                  matchedDestination = dest.name;
                   break;
                 }
               }
@@ -1221,7 +1333,7 @@ include("db.php");
             searchButton.click();
           }, 300);
         } else {
-          alert('Destination not found. Please try: Pokhara, Chitwan, Lumbini, or Annapurna');
+          alert('Destination not found. Please try another search.');
           document.getElementById('destination').value = '';
         }
       });
@@ -1242,7 +1354,7 @@ include("db.php");
       searchButton.addEventListener('click', function(e) {
         e.preventDefault();
         
-        const destination = document.getElementById('destination').value;
+        const destinationName = document.getElementById('destination').value;
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         
@@ -1253,7 +1365,7 @@ include("db.php");
         }
         
         // Validate destination
-        if (!destination) {
+        if (!destinationName) {
           alert('Please select a destination from the list');
           return;
         }
@@ -1270,39 +1382,47 @@ include("db.php");
         
         let count = 0;
         
-        if (destination && destinations[destination]) {
-          // Show specific destination - SIMPLE CARD LIKE IN EXPLORE SECTION
-          const dest = destinations[destination];
-          createDestinationCard(dest, formattedStartDate, formattedEndDate);
-          count++;
+        // Find the selected destination
+        const selectedDestination = allDestinations[destinationName];
+        
+        if (selectedDestination) {
+          // Create destination card
+          createDestinationCard(selectedDestination, formattedStartDate, formattedEndDate);
+          count = 1;
         } else {
-          // No destination selected
+          // Destination not found in our data
           destinationCardsResults.innerHTML = `
             <div class="no-results">
               <i>✈️</i>
-              <p>Please select a destination from the dropdown list</p>
+              <p>Destination not found. Please select a valid destination from the list.</p>
             </div>
           `;
         }
         
         // Update results count
-        resultsCount.textContent = `${count} destination found`;
+        resultsCount.textContent = `${count} destination${count !== 1 ? 's' : ''} found`;
         
         // Scroll to results
         searchResults.scrollIntoView({ behavior: 'smooth' });
       });
       
-      // Function to create SIMPLE destination card (like in Explore section)
+      // Function to create destination card
       function createDestinationCard(dest, startDate, endDate) {
         const card = document.createElement('div');
         card.className = 'destination-card-result';
+        
+        // Use dynamic-destination.php for admin-added destinations, keep .html for static ones
+        let viewDetailsLink = dest.page;
+        if (!dest.page.includes('.html')) {
+          viewDetailsLink = `dynamic-destination.php?name=${encodeURIComponent(dest.name)}`;
+        }
         
         card.innerHTML = `
           <h3 class="card-title-result">${dest.name}</h3>
           <p class="card-dates-result">📅 ${startDate || "Any date"} - ${endDate || "Any date"}</p>
           <p>${dest.description}</p>
           <p class="card-price-result">Starting from ${dest.price}</p>
-          <a href="${dest.page}" class="card-button-result">View Details</a>
+          <a href="${viewDetailsLink}" class="card-button-result">View Details</a>
         `;
         destinationCardsResults.appendChild(card);
       }
