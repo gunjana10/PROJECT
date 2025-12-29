@@ -14,8 +14,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (mysqli_num_rows($result) == 1) {
         $user = mysqli_fetch_assoc($result);
         
+        // ✅ ADD THIS: Check if user account is active
+        if ($user['status'] != 'active') {
+            $error = "❌ Your account is disabled. Please contact administrator.";
+        }
         // Check if password matches (plain text comparison)
-        if ($password == $user['password']) {
+        else if ($password == $user['password']) {
             // Set session variables - FIXED: ADD EMAIL
             $_SESSION['id'] = $user['id'];
             $_SESSION['fullname'] = $user['fullname'];
@@ -145,6 +149,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             font-size: 14px;
         }
         
+        /* Add disabled account error style */
+        .server-error.disabled {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        
         .submit-btn {
             width: 100%;
             padding: 16px;
@@ -205,7 +216,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             
             <?php if ($error != ""): ?>
-                <div class="server-error">
+                <div class="server-error <?php echo strpos($error, 'disabled') !== false ? 'disabled' : ''; ?>">
                     <?php echo $error; ?>
                 </div>
             <?php endif; ?>
@@ -233,6 +244,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             <div class="links">
                 Don't have an account? <a href="signup.php">Create Account</a>
+                <br><br>
+                <a href="index.php" style="color: #666;">← Back to Home</a>
             </div>
         </div>
     </div>

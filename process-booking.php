@@ -69,7 +69,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $user_data = mysqli_fetch_assoc($email_result);
             $user_id = $user_data['id'];
             
-            // Create booking for registered user
+            // Create booking for registered user with status = 'pending'
             $query = "INSERT INTO bookings (
                         user_id, full_name, email, phone, destination, 
                         start_date, end_date, travelers, package, hotel, transport, 
@@ -77,7 +77,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                       ) VALUES (
                         '$user_id', '$full_name', '$email', '$phone', '$destination',
                         '$start_date', '$end_date', '$travelers', '$package', '$hotel', '$transport',
-                        '$price', '$special_requests', 'confirmed'
+                        '$price', '$special_requests', 'pending'  -- CHANGED FROM 'confirmed' TO 'pending'
                       )";
             
             if (mysqli_query($conn, $query)) {
@@ -113,7 +113,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit();
         }
     } else {
-        // User is already logged in
+        // User is already logged in - with status = 'pending'
         $query = "INSERT INTO bookings (
                     user_id, full_name, email, phone, destination, 
                     start_date, end_date, travelers, package, hotel, transport, 
@@ -121,7 +121,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   ) VALUES (
                     '$user_id', '$full_name', '$email', '$phone', '$destination',
                     '$start_date', '$end_date', '$travelers', '$package', '$hotel', '$transport',
-                    '$price', '$special_requests', 'confirmed'
+                    '$price', '$special_requests', 'pending'  -- CHANGED FROM 'confirmed' TO 'pending'
                   )";
         
         if (mysqli_query($conn, $query)) {

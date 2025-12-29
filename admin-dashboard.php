@@ -1052,8 +1052,9 @@ if (isset($_GET['edit'])) {
                                     </span>
                                 </td>
                                 <td>
+                                    <!-- FIXED: Changed from $row['num_travelers'] to $row['travelers'] -->
                                     <span class="info-badge traveler-badge">
-                                        <i class="fas fa-users"></i> <?php echo htmlspecialchars($row['num_travelers'] ?? 1); ?> pax
+                                        <i class="fas fa-users"></i> <?php echo htmlspecialchars($row['travelers'] ?? 1); ?> pax
                                     </span>
                                 </td>
                                 <td>
@@ -1701,7 +1702,8 @@ if (isset($_GET['edit'])) {
                     </div>
                     <div>
                         <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Travelers</div>
-                        <div><span class="info-badge traveler-badge">${booking.num_travelers || 1} persons</span></div>
+                        <!-- FIXED: Changed from booking.num_travelers to booking.travelers -->
+                        <div><span class="info-badge traveler-badge">${booking.travelers || 1} persons</span></div>
                     </div>
                     <div>
                         <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Travel Dates</div>

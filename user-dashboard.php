@@ -60,9 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $new_price = $base_price_per_person * $travelers;
                 }
                 
-                // Update booking
+                // Update booking - FIXED: full_name instead of fullname
                 $update_query = "UPDATE bookings SET 
-                    fullname='$fullname',
+                    full_name='$fullname',
                     phone='$phone',
                     start_date='$start_date',
                     end_date='$end_date',
@@ -1364,6 +1364,19 @@ $titles = [
     </div>
 
     <script>
+        // Store booking data from PHP
+        let bookingData = {
+            <?php 
+            // Pass booking data to JavaScript
+            mysqli_data_seek($bookings_query, 0);
+            while ($booking = mysqli_fetch_assoc($bookings_query)): 
+                // Make sure we use full_name for the name field
+                $booking['fullname'] = $booking['full_name']; // Map full_name to fullname for JS
+            ?>
+            <?php echo $booking['id']; ?>: <?php echo json_encode($booking); ?>,
+            <?php endwhile; ?>
+        };
+        
         // Auto-hide alerts after 5 seconds
         setTimeout(() => {
             document.querySelectorAll('.alert').forEach(alert => {
@@ -1404,39 +1417,48 @@ $titles = [
         
         // View booking details
         function viewBookingDetails(bookingId) {
-            // Create a simple AJAX request to get booking details
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', 'get-booking-details.php?id=' + bookingId, true);
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        if (data.success) {
-                            currentBookingData = data.booking;
-                            populateDetailsView(data.booking);
-                            updateEditButtonVisibility(data.booking);
-                            openModal();
-                        } else {
-                            alert('Error: ' + (data.message || 'Failed to load booking details'));
-                        }
-                    } catch (e) {
-                        console.error('Error parsing JSON:', e);
-                        alert('Error loading booking details');
-                    }
-                } else {
-                    alert('Error loading booking details. Please try again.');
-                }
-            };
-            xhr.onerror = function() {
-                alert('Network error. Please check your connection.');
-            };
-            xhr.send();
+            if (bookingData[bookingId]) {
+                const booking = bookingData[bookingId];
+                currentBookingData = booking;
+                populateDetailsView(booking);
+                updateEditButtonVisibility(booking);
+                openModal();
+            } else {
+                // Simple fetch as fallback
+                fetchBookingDetailsSimple(bookingId);
+            }
         }
         
         // Direct edit booking
         function editBooking(bookingId) {
-            viewBookingDetails(bookingId);
-            setTimeout(switchToEdit, 300);
+            if (bookingData[bookingId]) {
+                const booking = bookingData[bookingId];
+                currentBookingData = booking;
+                populateDetailsView(booking);
+                updateEditButtonVisibility(booking);
+                openModal();
+                setTimeout(switchToEdit, 100);
+            } else {
+                alert('Booking data not found. Please refresh the page.');
+            }
+        }
+        
+        // Simple fetch function
+        function fetchBookingDetailsSimple(bookingId) {
+            // Create a simple form to get data
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = window.location.href;
+            form.style.display = 'none';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'fetch_booking';
+            input.value = bookingId;
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
         }
         
         // Populate details view
@@ -1457,7 +1479,7 @@ $titles = [
             document.getElementById('detailStatus').className = `badge badge-${booking.status}`;
             document.getElementById('detailBookedDate').textContent = formatDate(booking.booking_date);
             document.getElementById('detailPrice').textContent = `₹${parseInt(booking.price).toLocaleString('en-IN')}`;
-            document.getElementById('detailFullname').textContent = booking.fullname || '<?php echo $user["fullname"]; ?>';
+            document.getElementById('detailFullname').textContent = booking.full_name || booking.fullname || '<?php echo $user["fullname"]; ?>';
             document.getElementById('detailEmail').textContent = booking.email;
             document.getElementById('detailPhone').textContent = booking.phone || 'Not provided';
             document.getElementById('detailDestination').textContent = booking.destination;
@@ -1473,10 +1495,17 @@ $titles = [
         // Populate edit form
         function populateEditForm(booking) {
             document.getElementById('editBookingId').value = booking.id;
-            document.getElementById('editFullname').value = booking.fullname || '';
+            document.getElementById('editFullname').value = booking.full_name || booking.fullname || '';
             document.getElementById('editPhone').value = booking.phone || '';
-            document.getElementById('editStartDate').value = booking.start_date.split(' ')[0];
-            document.getElementById('editEndDate').value = booking.end_date.split(' ')[0];
+            
+            // Format dates for input type="date"
+            const formatDateForInput = (dateString) => {
+                const date = new Date(dateString);
+                return date.toISOString().split('T')[0];
+            };
+            
+            document.getElementById('editStartDate').value = formatDateForInput(booking.start_date);
+            document.getElementById('editEndDate').value = formatDateForInput(booking.end_date);
             document.getElementById('editTravelers').value = booking.travelers || '1';
             document.getElementById('editPackage').value = booking.package || 'Basic Pilgrimage (Rs.21,480)';
             document.getElementById('editHotel').value = booking.hotel || 'Basic Hotel';
@@ -1544,6 +1573,26 @@ $titles = [
                 if (closeBtn) {
                     closeBtn.closest('.alert').remove();
                 }
+            }
+        });
+        
+        // Check if we should open modal on page load (after form submission)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const editBookingId = urlParams.get('edit_id');
+            
+            if (editBookingId && bookingData[editBookingId]) {
+                const booking = bookingData[editBookingId];
+                currentBookingData = booking;
+                populateDetailsView(booking);
+                updateEditButtonVisibility(booking);
+                openModal();
+                setTimeout(switchToEdit, 300);
+                
+                // Remove the parameter from URL without reloading
+                const newUrl = window.location.pathname + '?tab=bookings';
+                window.history.replaceState({}, '', newUrl);
             }
         });
     </script>

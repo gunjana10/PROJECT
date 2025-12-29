@@ -21,8 +21,6 @@ if (!$destination) {
 $itinerary = !empty($destination['itinerary']) ? json_decode($destination['itinerary'], true) : [];
 $included_services = !empty($destination['included_services']) ? explode("\n", $destination['included_services']) : [];
 $not_included = !empty($destination['not_included']) ? explode("\n", $destination['not_included']) : [];
-$hotel_options = !empty($destination['hotel_options']) ? explode("\n", $destination['hotel_options']) : ['Basic Hotel', '3-Star Hotel', '4-Star Hotel'];
-$transport_options = !empty($destination['transport_options']) ? explode("\n", $destination['transport_options']) : ['Bus', 'Flight', 'Private Vehicle'];
 
 // Get duration, difficulty, best season from database
 $duration = !empty($destination['duration']) ? $destination['duration'] : '5 Days';
@@ -602,12 +600,12 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                     <div class="form-group">
                         <label for="package">Package *</label>
                         <select id="package" name="package" required>
-                            <option value="basic">Basic Package (<?php echo htmlspecialchars($destination['price']); ?>)</option>
-                            <option value="standard">Standard Package (<?php 
+                            <option value="Basic Pilgrimage (Rs.21,480)">Basic Package (<?php echo htmlspecialchars($destination['price']); ?>)</option>
+                            <option value="Standard Package (Rs.28,500)">Standard Package (<?php 
                                 $standard_price = $base_price * 1.3;
                                 echo 'RS.' . number_format($standard_price);
                             ?>)</option>
-                            <option value="premium">Premium Experience (<?php 
+                            <option value="Premium Experience (Rs.35,000)">Premium Experience (<?php 
                                 $premium_price = $base_price * 1.6;
                                 echo 'RS.' . number_format($premium_price);
                             ?>)</option>
@@ -617,26 +615,21 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                     <div class="form-group">
                         <label for="hotel">Hotel Category *</label>
                         <select id="hotel" name="hotel" required>
-                            <option value="">Select hotel category</option>
-                            <?php foreach ($hotel_options as $hotel): 
-                                if (trim($hotel)): ?>
-                            <option value="<?php echo htmlspecialchars(strtolower(str_replace(' ', '_', trim($hotel)))); ?>">
-                                <?php echo htmlspecialchars(trim($hotel)); ?>
-                            </option>
-                            <?php endif; endforeach; ?>
+                            <option value="basic">Basic Hotel</option>
+                            <option value="3star">3-Star Hotel</option>
+                            <option value="4star">4-Star Hotel</option>
+                            <option value="5star">5-Star Hotel</option>
+                            <option value="luxury">Luxury Resort</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="transport">Transport Type *</label>
                         <select id="transport" name="transport" required>
-                            <option value="">Select transport type</option>
-                            <?php foreach ($transport_options as $transport): 
-                                if (trim($transport)): ?>
-                            <option value="<?php echo htmlspecialchars(strtolower(trim($transport))); ?>">
-                                <?php echo htmlspecialchars(trim($transport)); ?>
-                            </option>
-                            <?php endif; endforeach; ?>
+                            <option value="bus">Bus</option>
+                            <option value="air">Flight</option>
+                            <option value="private">Private Vehicle</option>
+                            <option value="jeep">Jeep</option>
                         </select>
                     </div>
                     
@@ -696,13 +689,8 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
         const bookButton = document.getElementById('bookNowBtn');
         const priceInput = document.getElementById('final_price');
 
-        // Hotel price multipliers (per night, 4 nights stay)
+        // Hotel price multipliers (per night, 4 nights stay) - SAME AS STATIC
         const hotelPrices = {
-            'basic_hotel': 400 * 4,
-            '3-star_hotel': 1800 * 4,
-            '4-star_hotel': 3500 * 4,
-            '5-star_hotel': 7000 * 4,
-            'luxury_resort': 10000 * 4,
             'basic': 400 * 4,
             '3star': 1800 * 4,
             '4star': 3500 * 4,
@@ -710,20 +698,19 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
             'luxury': 10000 * 4
         };
 
-        // Transport price multipliers
+        // Transport price multipliers - SAME AS STATIC
         const transportPrices = {
             'bus': 1200,
-            'flight': 7500,
-            'private_vehicle': 10000,
-            'jeep': 2500,
-            'private': 10000
+            'air': 7500,
+            'private': 10000,
+            'jeep': 2500
         };
 
         // Package multipliers
         const packageMultipliers = {
-            'basic': 1,
-            'standard': 1.3,
-            'premium': 1.6
+            'Basic Pilgrimage (Rs.21,480)': 1,
+            'Standard Package (Rs.28,500)': 1.3,
+            'Premium Experience (Rs.35,000)': 1.6
         };
 
         function updatePrice() {
