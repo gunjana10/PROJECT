@@ -1,5 +1,13 @@
 <?php
 include("db.php"); 
+
+// Function to format price with RS. prefix
+function formatPriceWithRs($price) {
+    if (strpos($price, 'RS.') === false && strpos($price, 'Rs.') === false && strpos($price, 'rs.') === false) {
+        return 'RS.' . $price;
+    }
+    return $price;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -154,6 +162,13 @@ include("db.php");
       border-color: transparent transparent #ffffff transparent;
     }
 
+    /* Divider for dropdown */
+    .dropdown-divider {
+      margin: 8px 0;
+      border: 0;
+      border-top: 1px solid #eee;
+    }
+
     /* ---------- Hero Section ---------- */
     .project {
       text-align: center;
@@ -218,7 +233,7 @@ include("db.php");
       background-color: #ff7300;
     }
 
-    /* NEW: Hero Search Suggestions Dropdown */
+    /* Hero Search Suggestions Dropdown */
     .search-suggestions {
       position: absolute;
       top: 100%;
@@ -320,6 +335,22 @@ include("db.php");
       font-size: 1.1rem;
     }
 
+    /* Hidden field style */
+    .hidden-field {
+      display: none !important;
+    }
+
+    /* Duration badge */
+    .duration-badge {
+      background-color: #e8f5e9;
+      color: #004d4d;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
     /* ------- Search Button ------- */
     .search-button {
       background-color: #004d4d;
@@ -386,7 +417,6 @@ include("db.php");
       object-fit: cover;
     }
 
-    /* NO RATING STYLES - REMOVED */
     .card-content {
       padding: 20px;
     }
@@ -656,64 +686,6 @@ include("db.php");
       color: #ff3c00;
     }
 
-    /* ------- Responsive ------- */
-    @media (max-width: 768px) {
-      header {
-        flex-direction: column;
-        padding: 15px 20px;
-        gap: 10px;
-      }
-      nav ul {
-        gap: 15px;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      .hero h1 {
-        font-size: 2.2rem;
-      }
-      .search-box input {
-        width: 80%;
-      }
-      .search-suggestions {
-        width: 80%;
-        left: 10%;
-        transform: none;
-      }
-      .search-bar {
-        flex-direction: column;
-      }
-      .search-field,
-      .search-button {
-        width: 100%;
-      }
-      .button-container {
-        flex-direction: column;
-        align-items: center;
-      }
-      .footer-content {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-      }
-      
-      /* Responsive dropdown */
-      .dropdown-content {
-        position: static;
-        box-shadow: none;
-        border-radius: 0;
-        padding: 0;
-        margin-top: 0;
-        display: none;
-      }
-      .dropdown-content::before {
-        display: none;
-      }
-      .dropdown-content a {
-        padding: 10px 15px;
-        background-color: #f8f8f8;
-      }
-    }
-
     /* ------- Search Results Styles ------- */
     .search-results {
       background-color: #f9f9f9;
@@ -819,25 +791,119 @@ include("db.php");
       margin-bottom: 10px;
       display: block;
     }
+
+    /* Travelers selector for search */
+    .travelers-selector {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .travelers-selector label {
+      font-weight: 600;
+      color: #004d4d;
+    }
+    
+    .travelers-selector select {
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        padding: 15px 20px;
+        gap: 10px;
+      }
+      nav ul {
+        gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .hero h1 {
+        font-size: 2.2rem;
+      }
+      .search-box input {
+        width: 80%;
+      }
+      .search-suggestions {
+        width: 80%;
+        left: 10%;
+        transform: none;
+      }
+      .search-bar {
+        flex-direction: column;
+      }
+      .search-field,
+      .search-button {
+        width: 100%;
+      }
+      .button-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .footer-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      
+      .dropdown-content {
+        position: static;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        margin-top: 0;
+        display: none;
+      }
+      .dropdown-content::before {
+        display: none;
+      }
+      .dropdown-content a {
+        padding: 10px 15px;
+        background-color: #f8f8f8;
+      }
+    }
   </style>
 </head>
 <body>
 
-  <!-- Navbar -->
+  <!-- Navbar - WITH DYNAMIC DESTINATIONS -->
   <header>
     <div class="logo">TripNext</div>
     <nav>
       <ul>
         <li><a href="index.php">Home</a></li>
         
-        <!-- Destinations Dropdown -->
+        <!-- Destinations Dropdown - WITH DYNAMIC DESTINATIONS -->
         <li class="dropdown">
           <a href="#" class="dropbtn">Destinations <i class="fa fa-caret-down"></i></a>
           <div class="dropdown-content">
+            <!-- Static Destinations (Always show these) -->
             <a href="pokhara.html">Pokhara</a>
             <a href="chitwan.html">Chitwan National Park</a>
             <a href="lumbini.html">Lumbini</a>
-            <a href="annapurna.html">Annapurna Base Camp(ABC)</a>
+            <a href="annapurna.html">Annapurna Base Camp (ABC)</a>
+            
+            <?php
+            // FETCH DYNAMIC DESTINATIONS FROM DATABASE
+            $nav_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Base Camp (ABC)', 'Annapurna Circuit') ORDER BY name";
+            $nav_result = mysqli_query($conn, $nav_query);
+            
+            if ($nav_result && mysqli_num_rows($nav_result) > 0) {
+                // Add a visual separator between static and dynamic destinations
+                echo '<hr class="dropdown-divider">';
+                
+                // Add all admin-added destinations
+                while ($nav_dest = mysqli_fetch_assoc($nav_result)) {
+                    echo '<a href="dynamic-destination.php?name=' . urlencode($nav_dest['name']) . '">' . 
+                         htmlspecialchars($nav_dest['name']) . '</a>';
+                }
+            }
+            ?>
           </div>
         </li>
         
@@ -869,55 +935,46 @@ include("db.php");
     </div>
   </section>
   
-  <!-- Search Container -->
+  <!-- Search Container - WITH TRAVELERS SELECTOR -->
   <div class="search-container">
     <h2>Plan Your Trip</h2>
     <div class="search-bar">
-      <!-- Start Date -->
+      <!-- Destination Dropdown - ALWAYS VISIBLE -->
       <div class="search-field">
-        <label for="startDate">Start Date</label>
-        <div class="search-field-input">
-          <i class="fa fa-calendar"></i>
-          <input type="date" id="startDate" placeholder="Start Date">
-        </div>
-      </div>
-      
-      <!-- End Date -->
-      <div class="search-field">
-        <label for="endDate">End Date</label>
-        <div class="search-field-input">
-          <i class="fa fa-calendar"></i>
-          <input type="date" id="endDate" placeholder="End Date">
-        </div>
-      </div>
-      
-      <!-- Destination Dropdown -->
-      <div class="search-field">
-        <label for="destination">Destination</label>
+        <label for="destination">Select Destination</label>
         <div class="search-field-input">
           <i class="fa fa-map-marker"></i>
           <select id="destination">
-            <option value="">Select Destination</option>
+            <option value="">-- Choose a Destination --</option>
             <?php
-            // FIRST: Show static destinations (always show these)
-            $static_destinations = [
-                ['name' => 'Pokhara', 'page' => 'pokhara.html'],
-                ['name' => 'Chitwan National Park', 'page' => 'chitwan.html'],
-                ['name' => 'Lumbini', 'page' => 'lumbini.html'],
-                ['name' => 'Annapurna Circuit', 'page' => 'annapurna.html']
+            // FIRST: Show static destinations with their durations
+            $static_destinations_with_duration = [
+                ['name' => 'Pokhara', 'duration' => 4, 'price' => 'RS.23,880'],
+                ['name' => 'Chitwan National Park', 'duration' => 3, 'price' => 'RS.35,880'],
+                ['name' => 'Lumbini', 'duration' => 2, 'price' => 'RS.21,480'],
+                ['name' => 'Annapurna Base Camp (ABC)', 'duration' => 7, 'price' => 'RS.13,850']
             ];
             
-            foreach ($static_destinations as $dest) {
-                echo '<option value="' . htmlspecialchars($dest['name']) . '">' . htmlspecialchars($dest['name']) . '</option>';
+            foreach ($static_destinations_with_duration as $dest) {
+                echo '<option value="' . htmlspecialchars($dest['name']) . '" 
+                      data-duration="' . $dest['duration'] . '"
+                      data-price="' . $dest['price'] . '">' . 
+                     htmlspecialchars($dest['name']) . ' - ' . $dest['price'] . '</option>';
             }
             
-            // THEN: Show admin-added destinations from database
-            $dest_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit', 'Annapurna Base Camp (ABC)') ORDER BY name";
+            // THEN: Show admin-added destinations from database with their durations
+            $dest_query = "SELECT name, duration, price FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Base Camp (ABC)', 'Annapurna Circuit') ORDER BY name";
             $dest_result = mysqli_query($conn, $dest_query);
             
             if ($dest_result && mysqli_num_rows($dest_result) > 0) {
                 while ($dest = mysqli_fetch_assoc($dest_result)) {
-                    echo '<option value="' . htmlspecialchars($dest['name']) . '">' . htmlspecialchars($dest['name']) . '</option>';
+                    $duration = isset($dest['duration']) ? $dest['duration'] : 3;
+                    $price = isset($dest['price']) ? $dest['price'] : 'RS.0';
+                    $formatted_price = formatPriceWithRs($price);
+                    echo '<option value="' . htmlspecialchars($dest['name']) . '" 
+                          data-duration="' . $duration . '"
+                          data-price="' . $formatted_price . '">' . 
+                         htmlspecialchars($dest['name']) . ' - ' . $formatted_price . '</option>';
                 }
             }
             ?>
@@ -925,7 +982,45 @@ include("db.php");
         </div>
       </div>
       
-      <button class="search-button" id="searchButton"><i class="fa fa-search"></i> Search</button>
+      <!-- Start Date - HIDDEN BY DEFAULT, SHOWS AFTER DESTINATION SELECTED -->
+      <div class="search-field hidden-field" id="startDateField">
+        <label for="startDate">Start Date</label>
+        <div class="search-field-input">
+          <i class="fa fa-calendar"></i>
+          <input type="date" id="startDate" placeholder="Select start date">
+        </div>
+      </div>
+      
+      <!-- End Date - HIDDEN BY DEFAULT, SHOWS AFTER START DATE SELECTED -->
+      <div class="search-field hidden-field" id="endDateField">
+        <label for="endDate">End Date <span id="durationDisplay" class="duration-badge"></span></label>
+        <div class="search-field-input">
+          <i class="fa fa-calendar"></i>
+          <input type="date" id="endDate" placeholder="Auto-calculated" readonly>
+        </div>
+      </div>
+      
+      <!-- Travelers Selector - HIDDEN BY DEFAULT, SHOWS AFTER DESTINATION SELECTED -->
+      <div class="search-field hidden-field" id="travelersField">
+        <label for="searchTravelers">Number of Travelers</label>
+        <div class="search-field-input">
+          <i class="fa fa-users"></i>
+          <select id="searchTravelers">
+            <option value="1">1 Person</option>
+            <option value="2" selected>2 Persons</option>
+            <option value="3">3 Persons</option>
+            <option value="4">4 Persons</option>
+            <option value="5">5 Persons</option>
+            <option value="6">6 Persons</option>
+            <option value="7">7 Persons</option>
+            <option value="8">8 Persons</option>
+            <option value="9">9 Persons</option>
+            <option value="10">10 Persons</option>
+          </select>
+        </div>
+      </div>
+      
+      <button class="search-button" id="searchButton"><i class="fa fa-search"></i> Search & Calculate Price</button>
     </div>
     
     <!-- Search Results Section -->
@@ -941,20 +1036,20 @@ include("db.php");
     </div>
   </div>
 
-  <!-- Explore Section - THIS IS THE KEY PART -->
+  <!-- Explore Section -->
   <section class="explore-section">
     <h2>Explore Nepal</h2>
     <p>Discover the breathtaking beauty and spiritual richness of Nepal's most iconic destinations</p>
 
     <div class="card-container">
-      <!-- FIRST: Show ALL 4 Static Destinations (Always show these) -->
+      <!-- FIRST: Show ALL 4 Static Destinations -->
       <?php
-      // Static destinations data - NEVER REMOVE THESE
       $static_destinations = [
           [
               'name' => 'Lumbini',
               'description' => 'Birthplace of Lord Buddha, UNESCO World Heritage Site',
               'price' => 'RS.21,480',
+              'duration' => 2,
               'image' => 'images/lumbini.jpg',
               'page' => 'lumbini.html'
           ],
@@ -962,6 +1057,7 @@ include("db.php");
               'name' => 'Chitwan National Park',
               'description' => 'Wildlife safari and jungle adventures',
               'price' => 'RS.35,880',
+              'duration' => 3,
               'image' => 'images/chitwan.jpg',
               'page' => 'chitwan.html'
           ],
@@ -969,6 +1065,7 @@ include("db.php");
               'name' => 'Annapurna Base Camp (ABC)',
               'description' => 'Stunning mountain views and trekking paradise',
               'price' => 'RS.13,850',
+              'duration' => 7,
               'image' => 'images/arnapurna.jpg',
               'page' => 'annapurna.html'
           ],
@@ -976,12 +1073,12 @@ include("db.php");
               'name' => 'Pokhara',
               'description' => 'Stunning mountain views and trekking paradise',
               'price' => 'RS.23,880',
+              'duration' => 4,
               'image' => 'images/pokhara.jpg',
               'page' => 'pokhara.html'
           ]
       ];
       
-      // Display ALL static destinations first
       foreach ($static_destinations as $dest) {
           ?>
           <div class="card">
@@ -989,7 +1086,7 @@ include("db.php");
             <div class="card-content">
               <h3><?php echo htmlspecialchars($dest['name']); ?></h3>
               <p><?php echo htmlspecialchars($dest['description']); ?></p>
-              <p class="price">From <?php echo $dest['price']; ?></p>
+              <p class="price"><?php echo $dest['price']; ?></p>
               <button class="btn">
                 <a href="<?php echo $dest['page']; ?>" class="view-details-btn">
                   View Details
@@ -1000,12 +1097,14 @@ include("db.php");
           <?php
       }
       
-      // THEN: Show admin-added destinations (as extras)
-      $destinations_query = "SELECT * FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit', 'Annapurna Base Camp (ABC)') ORDER BY created_at DESC";
+      // THEN: Show admin-added destinations
+      $destinations_query = "SELECT * FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Base Camp (ABC)', 'Annapurna Circuit') ORDER BY created_at DESC";
       $destinations_result = mysqli_query($conn, $destinations_query);
       
       if ($destinations_result && mysqli_num_rows($destinations_result) > 0) {
           while ($destination = mysqli_fetch_assoc($destinations_result)) {
+              $duration = isset($destination['duration']) ? $destination['duration'] : 3;
+              $formatted_price = formatPriceWithRs($destination['price']);
               ?>
               <div class="card">
                 <img src="<?php echo htmlspecialchars($destination['image_url']); ?>" 
@@ -1014,7 +1113,7 @@ include("db.php");
                 <div class="card-content">
                   <h3><?php echo htmlspecialchars($destination['name']); ?></h3>
                   <p><?php echo htmlspecialchars($destination['description']); ?></p>
-                  <p class="price">From <?php echo htmlspecialchars($destination['price']); ?></p>
+                  <p class="price"><?php echo $formatted_price; ?></p>
                   <button class="btn">
                     <a href="dynamic-destination.php?name=<?php echo urlencode($destination['name']); ?>" class="view-details-btn">
                       View Details
@@ -1035,7 +1134,6 @@ include("db.php");
     <p>Everything you need to plan, book, and enjoy your perfect trip</p>
 
     <div class="features-container">
-      
       <div class="feature-card">
         <i class="fa fa-map-marker"></i>
         <h3>Smart Planning</h3>
@@ -1053,7 +1151,6 @@ include("db.php");
         <h3>Travel Journal</h3>
         <p>Document your journey with photos, notes, and memories that last forever</p>
       </div>
-
     </div>
   </section>
 
@@ -1089,14 +1186,12 @@ include("db.php");
         <h4>Destinations</h4>
         <ul>
           <?php
-          // Show static destinations in footer first
-          $footer_static = ['Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit'];
+          $footer_static = ['Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Base Camp (ABC)'];
           foreach ($footer_static as $dest_name) {
               echo '<li>' . htmlspecialchars($dest_name) . '</li>';
           }
           
-          // Then show admin-added destinations
-          $footer_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Circuit') LIMIT 4";
+          $footer_query = "SELECT name FROM destinations WHERE name NOT IN ('Pokhara', 'Chitwan National Park', 'Lumbini', 'Annapurna Base Camp (ABC)', 'Annapurna Circuit') LIMIT 4";
           $footer_result = mysqli_query($conn, $footer_query);
           if ($footer_result) {
               while ($footer_dest = mysqli_fetch_assoc($footer_result)) {
@@ -1141,63 +1236,91 @@ include("db.php");
       const destinationCardsResults = document.getElementById('destinationCardsResults');
       const resultsCount = document.getElementById('resultsCount');
       
-      // Define BOTH static and dynamic destinations
+      // New elements for conditional fields
+      const destinationSelect = document.getElementById('destination');
+      const startDateField = document.getElementById('startDateField');
+      const endDateField = document.getElementById('endDateField');
+      const travelersField = document.getElementById('travelersField');
+      const startDateInput = document.getElementById('startDate');
+      const endDateInput = document.getElementById('endDate');
+      const durationDisplay = document.getElementById('durationDisplay');
+      const searchTravelers = document.getElementById('searchTravelers');
+      
+      // Define static destinations with their durations and prices
       const staticDestinations = {
         "Pokhara": {
           name: "Pokhara",
           price: "RS.23,880",
           page: "pokhara.html",
           description: "Stunning mountain views and trekking paradise",
-          image: "images/pokhara.jpg"
+          image: "images/pokhara.jpg",
+          duration: 4
         },
         "Chitwan National Park": {
           name: "Chitwan National Park",
           price: "RS.35,880",
           page: "chitwan.html",
           description: "Wildlife safari and jungle adventures",
-          image: "images/chitwan.jpg"
+          image: "images/chitwan.jpg",
+          duration: 3
         },
         "Lumbini": {
           name: "Lumbini",
           price: "RS.21,480",
           page: "lumbini.html",
           description: "Birthplace of Lord Buddha, UNESCO World Heritage Site",
-          image: "images/lumbini.jpg"
+          image: "images/lumbini.jpg",
+          duration: 2
         },
-        
         "Annapurna Base Camp (ABC)": {
           name: "Annapurna Base Camp (ABC)",
           price: "RS.13,850",
           page: "annapurna.html",
           description: "Stunning mountain views and trekking paradise",
-          image: "images/arnapurna.jpg"
+          image: "images/arnapurna.jpg",
+          duration: 7
         }
       };
       
-      let allDestinations = { ...staticDestinations }; // Start with static destinations
+      let allDestinations = { ...staticDestinations };
+      let destinationDurations = {};
+      let destinationPrices = {};
       
-      // Fetch admin-added destinations and combine with static ones
+      // Initialize destination durations and prices from static destinations
+      for (const [key, value] of Object.entries(staticDestinations)) {
+        destinationDurations[key] = value.duration;
+        destinationPrices[key] = value.price;
+      }
+      
+      // Fetch admin-added destinations
       fetch('get-destinations.php')
         .then(response => response.json())
         .then(adminDestinations => {
-          // Add admin destinations to the list (excluding static ones)
           adminDestinations.forEach(dest => {
             if (!staticDestinations[dest.name]) {
-              allDestinations[dest.name] = dest;
+              // Format price with RS. prefix
+              let price = dest.price || 'RS.0';
+              if (price && !price.includes('RS.') && !price.includes('Rs.') && !price.includes('rs.')) {
+                price = 'RS.' + price;
+              }
+              
+              allDestinations[dest.name] = {
+                name: dest.name,
+                price: price,
+                description: dest.description || 'Beautiful destination in Nepal',
+                image: dest.image_url || '',
+                duration: dest.duration || 3,
+                page: `dynamic-destination.php?name=${encodeURIComponent(dest.name)}`
+              };
+              destinationDurations[dest.name] = dest.duration || 3;
+              destinationPrices[dest.name] = price;
             }
           });
-          
-          // Update search suggestions
           updateSearchSuggestions();
-          
-          // Update destination dropdown
-          updateDestinationDropdown();
         })
         .catch(error => {
           console.error('Error loading admin destinations:', error);
-          // If fetch fails, just use static destinations
           updateSearchSuggestions();
-          updateDestinationDropdown();
         });
       
       // Function to update search suggestions
@@ -1211,11 +1334,12 @@ include("db.php");
           suggestion.innerHTML = `
             <i class="fa fa-map-marker"></i>
             <span>${destName}</span>
+            <span style="margin-left: auto; color: #004d4d; font-weight: 600;">${destinationPrices[destName] || 'RS.0'}</span>
           `;
           
           suggestion.addEventListener('click', function() {
             const destination = this.getAttribute('data-destination');
-            heroSearchInput.value = this.querySelector('span').textContent;
+            heroSearchInput.value = destination;
             searchSuggestions.style.display = 'none';
             
             // Scroll to search container
@@ -1224,54 +1348,103 @@ include("db.php");
             // Set the dropdown value
             document.getElementById('destination').value = destination;
             
-            // Show results after a short delay
-            setTimeout(() => {
-              searchButton.click();
-            }, 300);
+            // Trigger change event to show date fields
+            const event = new Event('change', { bubbles: true });
+            document.getElementById('destination').dispatchEvent(event);
           });
           
           searchSuggestions.appendChild(suggestion);
         });
       }
       
-      // Function to update destination dropdown
-      function updateDestinationDropdown() {
-        const destinationSelect = document.getElementById('destination');
-        // Clear existing options except first one
-        while (destinationSelect.options.length > 1) {
-          destinationSelect.remove(1);
-        }
+      // Set minimum date for start date to today
+      const today = new Date().toISOString().split('T')[0];
+      startDateInput.min = today;
+      
+      // WHEN DESTINATION IS SELECTED - Show start date field and travelers field
+      destinationSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const duration = selectedOption.dataset.duration;
+        const price = selectedOption.dataset.price;
+        const destinationName = this.value;
         
-        // Add all destinations
-        Object.keys(allDestinations).forEach(destName => {
-          const option = document.createElement('option');
-          option.value = destName;
-          option.textContent = destName;
-          destinationSelect.appendChild(option);
-        });
+        if (this.value) {
+          // Show fields
+          startDateField.classList.remove('hidden-field');
+          travelersField.classList.remove('hidden-field');
+          
+          // Hide end date field until start date is selected
+          endDateField.classList.add('hidden-field');
+          
+          // Clear previous dates
+          startDateInput.value = '';
+          endDateInput.value = '';
+          
+          // Update duration display
+          if (duration) {
+            durationDisplay.textContent = `${duration} days`;
+          }
+          
+          // Store duration and price for this destination
+          if (destinationName) {
+            destinationDurations[destinationName] = parseInt(duration) || 3;
+            destinationPrices[destinationName] = price || 'RS.0';
+          }
+        } else {
+          // No destination selected - hide fields
+          startDateField.classList.add('hidden-field');
+          endDateField.classList.add('hidden-field');
+          travelersField.classList.add('hidden-field');
+        }
+      });
+      
+      // WHEN START DATE IS SELECTED - Calculate and show end date
+      startDateInput.addEventListener('change', function() {
+        const selectedOption = destinationSelect.options[destinationSelect.selectedIndex];
+        const duration = parseInt(selectedOption.dataset.duration) || 3;
+        const startDate = this.value;
+        
+        if (startDate) {
+          // Calculate end date
+          const endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + (duration - 1));
+          
+          // Format end date as YYYY-MM-DD
+          const year = endDate.getFullYear();
+          const month = String(endDate.getMonth() + 1).padStart(2, '0');
+          const day = String(endDate.getDate()).padStart(2, '0');
+          const formattedEndDate = `${year}-${month}-${day}`;
+          
+          // Set end date
+          endDateInput.value = formattedEndDate;
+          
+          // Show end date field
+          endDateField.classList.remove('hidden-field');
+        }
+      });
+      
+      // Function to calculate total price based on travelers
+      function calculateTotalPrice(basePrice, travelers) {
+        // Remove RS., commas, etc. and convert to number
+        const numericPrice = parseFloat(basePrice.toString().replace(/[RS., ₹रू\s]/g, ''));
+        return numericPrice * travelers;
       }
       
-      // Set minimum dates
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('startDate').min = today;
-      document.getElementById('endDate').min = today;
+      // Function to format date for URL (YYYY-MM-DD)
+      function formatDateForUrl(dateString) {
+        if (!dateString) return '';
+        return dateString;
+      }
       
-      // Update end date minimum when start date changes
-      document.getElementById('startDate').addEventListener('change', function() {
-        document.getElementById('endDate').min = this.value;
-      });
-      
-      // Show search suggestions when hero search input is focused
-      heroSearchInput.addEventListener('focus', function() {
-        searchSuggestions.style.display = 'block';
-      });
-      
-      // Hide search suggestions when clicking outside
-      document.addEventListener('click', function(event) {
-        if (!heroSearchInput.contains(event.target) && !searchSuggestions.contains(event.target)) {
-          searchSuggestions.style.display = 'none';
-        }
-      });
+      // Function to format display date (MM/DD/YYYY)
+      function formatDisplayDate(dateString) {
+        if (!dateString) return "Not selected";
+        const date = new Date(dateString);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${month}/${day}/${year}`;
+      }
       
       // Handle Hero Section search button click
       heroSearchBtn.addEventListener('click', function(e) {
@@ -1284,49 +1457,42 @@ include("db.php");
           return;
         }
         
-        // Scroll to search container
-        document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
-        
         // Find matching destination
         let matchedDestination = '';
+        let matchedDuration = 3;
+        let matchedPrice = 'RS.0';
         
-        // Check for exact matches first
-        for (const key in allDestinations) {
-          const dest = allDestinations[key];
-          const destName = dest.name.toLowerCase();
+        // Check dropdown options
+        for (let i = 0; i < destinationSelect.options.length; i++) {
+          const option = destinationSelect.options[i];
+          const optionText = option.textContent.toLowerCase();
+          const optionValue = option.value.toLowerCase();
           
-          if (destName.includes(searchTerm) || key.toLowerCase() === searchTerm) {
-            matchedDestination = dest.name;
+          if (optionText.includes(searchTerm) || optionValue.includes(searchTerm)) {
+            matchedDestination = option.value;
+            matchedDuration = option.dataset.duration || 3;
+            matchedPrice = option.dataset.price || 'RS.0';
             break;
           }
         }
         
-        // If no exact match, try partial matches
-        if (!matchedDestination) {
-          for (const key in allDestinations) {
-            const dest = allDestinations[key];
-            const destName = dest.name.toLowerCase();
-            
-            // Check for partial word matches
-            const destWords = destName.split(' ');
-            const searchWords = searchTerm.split(' ');
-            
-            for (const searchWord of searchWords) {
-              for (const destWord of destWords) {
-                if (destWord.startsWith(searchWord) || destWord.includes(searchWord)) {
-                  matchedDestination = dest.name;
-                  break;
-                }
-              }
-              if (matchedDestination) break;
-            }
-            if (matchedDestination) break;
-          }
-        }
-        
-        // Set the dropdown to matched destination
         if (matchedDestination) {
-          document.getElementById('destination').value = matchedDestination;
+          // Set the dropdown value
+          destinationSelect.value = matchedDestination;
+          
+          // Trigger change event to show date fields
+          const event = new Event('change', { bubbles: true });
+          destinationSelect.dispatchEvent(event);
+          
+          // Scroll to search container
+          document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+          
+          // Set today as default start date
+          startDateInput.value = today;
+          
+          // Trigger change event to calculate end date
+          const startEvent = new Event('change', { bubbles: true });
+          startDateInput.dispatchEvent(startEvent);
           
           // Show results after a short delay
           setTimeout(() => {
@@ -1334,7 +1500,6 @@ include("db.php");
           }, 300);
         } else {
           alert('Destination not found. Please try another search.');
-          document.getElementById('destination').value = '';
         }
       });
       
@@ -1350,92 +1515,124 @@ include("db.php");
         document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
       });
       
-      // Handle search button click in the search container
+      // Handle Hero Search Input focus/blur for suggestions
+      heroSearchInput.addEventListener('focus', function() {
+        if (Object.keys(allDestinations).length > 0) {
+          searchSuggestions.style.display = 'block';
+        }
+      });
+      
+      heroSearchInput.addEventListener('blur', function() {
+        setTimeout(() => {
+          searchSuggestions.style.display = 'none';
+        }, 200);
+      });
+      
+      heroSearchInput.addEventListener('input', function() {
+        const searchTerm = this.value.trim().toLowerCase();
+        const suggestions = searchSuggestions.querySelectorAll('.search-suggestion-item');
+        
+        suggestions.forEach(suggestion => {
+          const destName = suggestion.querySelector('span').textContent.toLowerCase();
+          if (destName.includes(searchTerm) || searchTerm === '') {
+            suggestion.style.display = 'flex';
+          } else {
+            suggestion.style.display = 'none';
+          }
+        });
+        
+        searchSuggestions.style.display = 'block';
+      });
+      
+      // Handle search button click
       searchButton.addEventListener('click', function(e) {
         e.preventDefault();
         
-        const destinationName = document.getElementById('destination').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
+        const destinationName = destinationSelect.value;
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        const travelers = parseInt(searchTravelers.value) || 2;
         
-        // Validate dates if provided
-        if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-          alert('End date must be after start date');
-          return;
-        }
-        
-        // Validate destination
         if (!destinationName) {
           alert('Please select a destination from the list');
           return;
         }
         
-        // Show results section
+        if (!startDate) {
+          alert('Please select a start date');
+          return;
+        }
+        
         searchResults.style.display = 'block';
         
-        // Format dates for display
-        const formattedStartDate = formatDate(startDate);
-        const formattedEndDate = formatDate(endDate);
+        const formattedStartDate = formatDisplayDate(startDate);
+        const formattedEndDate = formatDisplayDate(endDate);
         
-        // Clear previous results
         destinationCardsResults.innerHTML = '';
         
         let count = 0;
-        
-        // Find the selected destination
         const selectedDestination = allDestinations[destinationName];
         
         if (selectedDestination) {
-          // Create destination card
-          createDestinationCard(selectedDestination, formattedStartDate, formattedEndDate);
+          // Calculate total price for all travelers
+          const basePrice = destinationPrices[destinationName] || selectedDestination.price || 'RS.0';
+          const totalPrice = calculateTotalPrice(basePrice, travelers);
+          const formattedTotalPrice = 'RS.' + totalPrice.toLocaleString('en-IN');
+          
+          // Create destination with total price
+          const destinationWithTotalPrice = {
+            ...selectedDestination,
+            price: formattedTotalPrice,
+            basePrice: basePrice,
+            travelers: travelers
+          };
+          
+          createDestinationCard(destinationWithTotalPrice, formattedStartDate, formattedEndDate, startDate, endDate);
           count = 1;
         } else {
-          // Destination not found in our data
           destinationCardsResults.innerHTML = `
             <div class="no-results">
-              <i>✈️</i>
+              <i class="fa fa-map-marker"></i>
               <p>Destination not found. Please select a valid destination from the list.</p>
             </div>
           `;
         }
         
-        // Update results count
         resultsCount.textContent = `${count} destination${count !== 1 ? 's' : ''} found`;
-        
-        // Scroll to results
         searchResults.scrollIntoView({ behavior: 'smooth' });
       });
       
       // Function to create destination card
-      function createDestinationCard(dest, startDate, endDate) {
+      function createDestinationCard(dest, displayStartDate, displayEndDate, rawStartDate, rawEndDate) {
         const card = document.createElement('div');
         card.className = 'destination-card-result';
         
-        // Use dynamic-destination.php for admin-added destinations, keep .html for static ones
         let viewDetailsLink = dest.page;
-        if (!dest.page.includes('.html')) {
+        if (!dest.page || !dest.page.includes('.html')) {
           viewDetailsLink = `dynamic-destination.php?name=${encodeURIComponent(dest.name)}`;
         }
         
+        const duration = destinationDurations[dest.name] || 3;
+        const travelers = dest.travelers || 2;
+        const totalPrice = dest.price;
+        
+        // Use raw dates for URL
+        const startDateForUrl = rawStartDate || '';
+        const endDateForUrl = rawEndDate || '';
+        
         card.innerHTML = `
           <h3 class="card-title-result">${dest.name}</h3>
-          <p class="card-dates-result">📅 ${startDate || "Any date"} - ${endDate || "Any date"}</p>
+          <p class="card-dates-result">📅 ${displayStartDate} - ${displayEndDate}</p>
           <p>${dest.description}</p>
-          <p class="card-price-result">Starting from ${dest.price}</p>
-          <a href="${viewDetailsLink}" class="card-button-result">View Details</a>
+          <p class="card-price-result">Total for ${travelers} traveler${travelers > 1 ? 's' : ''}: ${totalPrice}</p>
+          <a href="${viewDetailsLink}?travelers=${travelers}&start_date=${startDateForUrl}&end_date=${endDateForUrl}&total_price=${encodeURIComponent(totalPrice)}" 
+             class="card-button-result">Book Now - ${totalPrice}</a>
         `;
         destinationCardsResults.appendChild(card);
       }
       
-      // Helper function to format date as mm/dd/yyyy
-      function formatDate(dateString) {
-        if (!dateString) return "Not selected";
-        const date = new Date(dateString);
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${month}/${day}/${year}`;
-      }
+      // Initialize the page
+      updateSearchSuggestions();
     });
   </script>
 

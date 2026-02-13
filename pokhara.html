@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pokhara - Explore Nepal</title>
     <style>
+        /* ALL YOUR EXISTING STYLES - KEEP EXACTLY THE SAME */
         * {
             margin: 0;
             padding: 0;
@@ -477,7 +478,6 @@
             <div class="hero-content">
                 <h1>Pokhara - Lake City</h1>
                 <p>Stunning Mountain Views & Adventure Hub</p>
-                <div class="rating">⭐ 4.12/5 Excellent</div>
                 <div class="price-tag">From RS.23,880</div>
             </div>
         </div>
@@ -578,7 +578,7 @@
                         <select id="travelers" name="travelers" required>
                             <option value="">Select travelers</option>
                             <option value="1">1 Person</option>
-                            <option value="2">2 People</option>
+                            <option value="2" selected>2 People</option>
                             <option value="3">3 People</option>
                             <option value="4">4 People</option>
                             <option value="5">5+ People</option>
@@ -588,32 +588,30 @@
                     <div class="form-group">
                         <label for="package">Experience Package *</label>
                         <select id="package" name="package" required>
-                            <option value="basic">Basic (RS.23,880)</option>
-                            <option value="adventure">Adventure (RS.32,500)</option>
-                            <option value="luxury">Luxury (RS.45,000)</option>
+                            <option value="Basic Package">Basic Package</option>
+                            <option value="Standard Package">Standard Package</option>
+                            <option value="Premium Package">Premium Package</option>
                         </select>
                     </div>
                     
-                    <!-- Hotel Options -->
                     <div class="form-group">
                         <label for="hotel">Hotel Category *</label>
                         <select id="hotel" name="hotel" required>
-                            <option value="basic">Basic Hotel</option>
-                            <option value="3star">3-Star Hotel</option>
-                            <option value="4star">4-Star Hotel</option>
-                            <option value="5star">5-Star Hotel</option>
-                            <option value="luxury">Luxury Resort</option>
+                            <option value="Basic Hotel">Basic Hotel</option>
+                            <option value="3-Star Hotel">3-Star Hotel</option>
+                            <option value="4-Star Hotel">4-Star Hotel</option>
+                            <option value="5-Star Hotel">5-Star Hotel</option>
+                            <option value="Luxury Resort">Luxury Resort</option>
                         </select>
                     </div>
                     
-                    <!-- Transport Options -->
                     <div class="form-group">
                         <label for="transport">Transport Type *</label>
                         <select id="transport" name="transport" required>
-                            <option value="bus">Bus</option>
-                            <option value="air">Flight</option>
-                            <option value="private">Private Vehicle</option>
-                            <option value="jeep">Jeep</option>
+                            <option value="Bus">Bus</option>
+                            <option value="Private Car">Private Car</option>
+                            <option value="Flight">Flight</option>
+                            <option value="Jeep">Jeep</option>
                         </select>
                     </div>
                     
@@ -662,88 +660,104 @@
     </div>
 
     <script>
-        // Dynamic pricing based on number of travelers, package, hotel, and transport
+        // ============== FIXED PRICE CALCULATION - LIKE DYNAMIC-DESTINATION.PHP ==============
         const pokharaBasePrice = 23880;
+        
+        // Get form elements
         const travelersSelect = document.getElementById('travelers');
         const packageSelect = document.getElementById('package');
         const hotelSelect = document.getElementById('hotel');
         const transportSelect = document.getElementById('transport');
         const bookButton = document.getElementById('bookNowBtn');
         const priceInput = document.getElementById('final_price');
-
-        // Hotel price multipliers (for 3 nights stay)
-        const hotelPrices = {
-            'basic': 700 * 3,
-            '3star': 2500 * 3,
-            '4star': 5000 * 3,
-            '5star': 10000 * 3,
-            'luxury': 18000 * 3
-        };
-
-        // Transport price multipliers
-        const transportPrices = {
-            'bus': 1200,
-            'air': 6500,
-            'private': 10000,
-            'jeep': 2000
-        };
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
 
         // Package multipliers
         const packageMultipliers = {
-            'basic': 1,
-            'adventure': 1.35,
-            'luxury': 1.85
+            'Basic Package': 1.0,
+            'Standard Package': 1.3,
+            'Premium Package': 1.6
         };
 
-        function updatePokharaPrice() {
-            const travelers = parseInt(travelersSelect.value) || 1;
-            const packageType = packageSelect.value;
-            const hotelType = hotelSelect.value;
-            const transportType = transportSelect.value;
-            
-            let packageMultiplier = packageMultipliers[packageType] || 1;
-            
-            // Calculate base price
-            const basePrice = pokharaBasePrice * travelers * packageMultiplier;
-            
-            // Add hotel cost
-            const hotelCost = (hotelPrices[hotelType] || 0) * travelers;
-            
-            // Add transport cost
-            const transportCost = (transportPrices[transportType] || 0) * travelers;
-            
-            // Total price
-            const totalPrice = Math.round(basePrice + hotelCost + transportCost);
-            
-            bookButton.textContent = `Book Now - RS.${totalPrice.toLocaleString()}`;
-            priceInput.value = totalPrice;
+        // Hotel multipliers
+        const hotelMultipliers = {
+            'Basic Hotel': 1.0,
+            '3-Star Hotel': 1.4,
+            '4-Star Hotel': 1.8,
+            '5-Star Hotel': 2.3,
+            'Luxury Resort': 3.0
+        };
+
+        // Transport multipliers
+        const transportMultipliers = {
+            'Bus': 1.0,
+            'Private Car': 1.5,
+            'Jeep': 1.3,
+            'Flight': 2.0
+        };
+
+        // Function to format price in RS.XX,XXX format
+        function formatPrice(amount) {
+            return 'RS.' + Math.round(amount).toLocaleString('en-IN');
         }
 
-        travelersSelect.addEventListener('change', updatePokharaPrice);
-        packageSelect.addEventListener('change', updatePokharaPrice);
-        hotelSelect.addEventListener('change', updatePokharaPrice);
-        transportSelect.addEventListener('change', updatePokharaPrice);
+        // Function to calculate total price
+        function calculateTotalPrice() {
+            const travelers = parseInt(travelersSelect.value) || 1;
+            const packageMultiplier = packageMultipliers[packageSelect.value] || 1.0;
+            const hotelMultiplier = hotelMultipliers[hotelSelect.value] || 1.0;
+            const transportMultiplier = transportMultipliers[transportSelect.value] || 1.0;
+            
+            // Calculate per person price with all multipliers
+            const perPersonPrice = pokharaBasePrice * packageMultiplier * hotelMultiplier * transportMultiplier;
+            
+            // Calculate total for all travelers
+            const totalPrice = perPersonPrice * travelers;
+            
+            return {
+                perPerson: perPersonPrice,
+                total: totalPrice,
+                travelers: travelers
+            };
+        }
 
-        // Set minimum date to today
+        // Function to update price display
+        function updatePrice() {
+            const priceData = calculateTotalPrice();
+            
+            // Update button text
+            bookButton.textContent = `Book Now - ${formatPrice(priceData.total)}`;
+            
+            // Update hidden input with total price
+            priceInput.value = priceData.total;
+        }
+
+        // Set minimum date for start date to today
         const today = new Date().toISOString().split('T')[0];
-        document.getElementById('start_date').min = today;
+        startDateInput.min = today;
 
-        // Automatically calculate end date (4 days after start date)
-        document.getElementById('start_date').addEventListener('change', function() {
+        // Calculate end date (4 days duration)
+        startDateInput.addEventListener('change', function() {
             if (this.value) {
                 const startDate = new Date(this.value);
                 const endDate = new Date(startDate);
-                // Add 3 nights/4 days (itinerary shows Day 1 to Day 4)
                 endDate.setDate(endDate.getDate() + 3);
                 
-                // Format to YYYY-MM-DD
-                const endDateString = endDate.toISOString().split('T')[0];
-                document.getElementById('end_date').value = endDateString;
+                const year = endDate.getFullYear();
+                const month = String(endDate.getMonth() + 1).padStart(2, '0');
+                const day = String(endDate.getDate()).padStart(2, '0');
+                const formattedEndDate = `${year}-${month}-${day}`;
                 
-                // Update price based on new dates if needed
-                updatePokharaPrice();
+                endDateInput.value = formattedEndDate;
             }
         });
+
+        // Add event listeners
+        travelersSelect.addEventListener('change', updatePrice);
+        packageSelect.addEventListener('change', updatePrice);
+        hotelSelect.addEventListener('change', updatePrice);
+        transportSelect.addEventListener('change', updatePrice);
 
         // Check URL for success/error parameters
         const urlParams = new URLSearchParams(window.location.search);
@@ -756,7 +770,8 @@
         }
 
         // Initialize price calculation
-        updatePokharaPrice();
+        setTimeout(updatePrice, 100);
+        // ============== END OF FIXED PRICE CALCULATION ==============
     </script>
 </body>
 </html>

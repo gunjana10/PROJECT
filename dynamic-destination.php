@@ -6,6 +6,12 @@ include("db.php");
 // Get destination name from URL
 $name = isset($_GET['name']) ? mysqli_real_escape_string($conn, $_GET['name']) : '';
 
+// Get travelers and dates from URL if coming from search
+$travelers_from_search = isset($_GET['travelers']) ? intval($_GET['travelers']) : 1;
+$start_date_from_search = isset($_GET['start_date']) ? $_GET['start_date'] : '';
+$end_date_from_search = isset($_GET['end_date']) ? $_GET['end_date'] : '';
+$total_price_from_search = isset($_GET['total_price']) ? $_GET['total_price'] : '';
+
 // Fetch destination details
 $query = "SELECT * FROM destinations WHERE name = '$name'";
 $result = mysqli_query($conn, $query);
@@ -15,6 +21,29 @@ $destination = mysqli_fetch_assoc($result);
 if (!$destination) {
     header("Location: index.php");
     exit();
+}
+
+// Function to extract number of days from duration string
+function extractDaysFromDuration($duration_text) {
+    $text = strtolower(trim($duration_text));
+    
+    if (preg_match('/(\d+)\s*(?:day|d)/i', $text, $matches)) {
+        return (int)$matches[1];
+    } elseif (preg_match('/(\d+)\s*(?:night|n)/i', $text, $matches)) {
+        return (int)$matches[1] + 1;
+    } elseif (preg_match('/(\d+)/', $text, $matches)) {
+        return (int)$matches[1];
+    }
+    
+    return 5;
+}
+
+// Function to format price with RS. prefix
+function formatPriceWithRs($price) {
+    if (strpos($price, 'RS.') === false && strpos($price, 'Rs.') === false && strpos($price, 'rs.') === false) {
+        return 'RS.' . $price;
+    }
+    return $price;
 }
 
 // Parse itinerary and other fields
@@ -28,17 +57,33 @@ $difficulty = !empty($destination['difficulty']) ? $destination['difficulty'] : 
 $best_season = !empty($destination['best_season']) ? $destination['best_season'] : 'Year-Round';
 $highlights = !empty($destination['highlights']) ? explode(',', $destination['highlights']) : [];
 
-// Calculate base price from "RS.XX,XXX" format
+// Calculate trip duration in days
+$trip_duration_days = extractDaysFromDuration($duration);
+
+// ============== FIX: ADD RS. PREFIX TO PRICE ==============
 $price_raw = $destination['price'];
-$base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'], '', $price_raw));
+$formatted_price = formatPriceWithRs($price_raw);
+$base_price_per_person = floatval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'], '', $formatted_price));
+// ==========================================================
+
+// If coming from search with total price, use that
+if (!empty($total_price_from_search)) {
+    $display_total_price = $total_price_from_search;
+    $total_price_numeric = floatval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'], '', $total_price_from_search));
+} else {
+    // Default to per person price with RS. prefix
+    $display_total_price = $formatted_price;
+    $total_price_numeric = $base_price_per_person;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($destination['name']); ?> - Explore Nepal</title>
+    <title><?php echo htmlspecialchars($destination['name']); ?> - TripNext</title>
     <style>
+        /* ALL YOUR EXISTING STYLES HERE - Keep them exactly as they are */
         * {
             margin: 0;
             padding: 0;
@@ -442,13 +487,6 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
             box-shadow: 0 5px 15px rgba(244, 67, 54, 0.3);
         }
 
-        .input-hint {
-            color: #666;
-            font-size: 0.8rem;
-            display: block;
-            margin-top: 5px;
-        }
-
         @media (max-width: 768px) {
             .hero-section,
             .content-section {
@@ -491,7 +529,12 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
             <div class="hero-content">
                 <h1><?php echo htmlspecialchars($destination['name']); ?></h1>
                 <p><?php echo htmlspecialchars($destination['description']); ?></p>
-                <div class="price-tag">From <?php echo htmlspecialchars($destination['price']); ?></div>
+                <div class="price-tag"><?php echo $formatted_price; ?></div>
+                <?php if (!empty($travelers_from_search) && $travelers_from_search > 1): ?>
+                <div class="price-tag" style="margin-top: 10px; background: #ff8c00; color: white;">
+                    Total for <?php echo $travelers_from_search; ?> travelers: <?php echo $display_total_price; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -515,11 +558,11 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                 <h2>Trip Information</h2>
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <div class="stat-number"><?php echo count($itinerary); ?> Days</div>
+                        <div class="stat-number"><?php echo $trip_duration_days; ?> Days</div>
                         <div class="stat-label">Duration</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number"><?php echo htmlspecialchars($destination['price']); ?></div>
+                        <div class="stat-number"><?php echo $formatted_price; ?></div>
                         <div class="stat-label">Starting Price</div>
                     </div>
                     <div class="stat-item">
@@ -558,6 +601,7 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
 
             <div class="booking-card">
                 <h3>Book Your Journey</h3>
+                
                 <form method="POST" action="process-booking.php" id="booking-form">
                     <input type="hidden" name="destination" value="<?php echo htmlspecialchars($destination['name']); ?>">
                     
@@ -573,17 +617,19 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                     
                     <div class="form-group">
                         <label for="phone">Phone Number *</label>
-                        <input type="tel" id="phone" name="phone" required placeholder="Enter your phone number" pattern="[\+\d\s\-\(\)]*">
+                        <input type="tel" id="phone" name="phone" required placeholder="Enter your phone number">
                     </div>
                     
                     <div class="form-group">
                         <label for="start_date">Start Date *</label>
-                        <input type="date" id="start_date" name="start_date" required>
+                        <input type="date" id="start_date" name="start_date" required 
+                               value="<?php echo htmlspecialchars($start_date_from_search); ?>">
                     </div>
                     
                     <div class="form-group">
                         <label for="end_date">End Date *</label>
-                        <input type="date" id="end_date" name="end_date" required readonly>
+                        <input type="date" id="end_date" name="end_date" required readonly
+                               value="<?php echo htmlspecialchars($end_date_from_search); ?>">
                     </div>
                     
                     <div class="form-group">
@@ -591,45 +637,40 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                         <select id="travelers" name="travelers" required>
                             <option value="">Select travelers</option>
                             <?php for ($i = 1; $i <= 10; $i++): ?>
-                            <option value="<?php echo $i; ?>"><?php echo $i; ?> Person<?php echo $i > 1 ? 's' : ''; ?></option>
+                            <option value="<?php echo $i; ?>" <?php echo ($travelers_from_search == $i) ? 'selected' : ''; ?>>
+                                <?php echo $i; ?> Person<?php echo $i > 1 ? 's' : ''; ?>
+                            </option>
                             <?php endfor; ?>
-                            <option value="11">11+ People</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="package">Package *</label>
                         <select id="package" name="package" required>
-                            <option value="Basic Pilgrimage (Rs.21,480)">Basic Package (<?php echo htmlspecialchars($destination['price']); ?>)</option>
-                            <option value="Standard Package (Rs.28,500)">Standard Package (<?php 
-                                $standard_price = $base_price * 1.3;
-                                echo 'RS.' . number_format($standard_price);
-                            ?>)</option>
-                            <option value="Premium Experience (Rs.35,000)">Premium Experience (<?php 
-                                $premium_price = $base_price * 1.6;
-                                echo 'RS.' . number_format($premium_price);
-                            ?>)</option>
+                            <option value="Basic Package">Basic Package</option>
+                            <option value="Standard Package">Standard Package</option>
+                            <option value="Premium Package">Premium Package</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="hotel">Hotel Category *</label>
                         <select id="hotel" name="hotel" required>
-                            <option value="basic">Basic Hotel</option>
-                            <option value="3star">3-Star Hotel</option>
-                            <option value="4star">4-Star Hotel</option>
-                            <option value="5star">5-Star Hotel</option>
-                            <option value="luxury">Luxury Resort</option>
+                            <option value="Basic Hotel">Basic Hotel</option>
+                            <option value="3-Star Hotel">3-Star Hotel</option>
+                            <option value="4-Star Hotel">4-Star Hotel</option>
+                            <option value="5-Star Hotel">5-Star Hotel</option>
+                            <option value="Luxury Resort">Luxury Resort</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="transport">Transport Type *</label>
                         <select id="transport" name="transport" required>
-                            <option value="bus">Bus</option>
-                            <option value="air">Flight</option>
-                            <option value="private">Private Vehicle</option>
-                            <option value="jeep">Jeep</option>
+                            <option value="Bus">Bus</option>
+                            <option value="Private Car">Private Car</option>
+                            <option value="Flight">Flight</option>
+                            <option value="Jeep">Jeep</option>
                         </select>
                     </div>
                     
@@ -638,10 +679,11 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                         <textarea id="special_requests" name="special_requests" placeholder="Any special requirements or additional requests..."></textarea>
                     </div>
                     
-                    <input type="hidden" id="final_price" name="price" value="<?php echo $base_price; ?>">
+                    <!-- IMPORTANT: This is the TOTAL PRICE for all travelers -->
+                    <input type="hidden" id="final_price" name="price" value="<?php echo $total_price_numeric; ?>">
                     
                     <button type="submit" class="book-now-btn" id="bookNowBtn">
-                        Book Now - <?php echo htmlspecialchars($destination['price']); ?>
+                        Book Now - <?php echo $display_total_price; ?>
                     </button>
                 </form>
             </div>
@@ -669,101 +711,119 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
                 </div>
                 <div class="policy-item">
                     <h4>📞 Support</h4>
-                    <p>+977-9849086473</p>
+                    <p>+977-9765340620</p>
                 </div>
                 <div class="policy-item">
                     <h4>📧 Email</h4>
-                    <p>info@tripnest.com</p>
+                    <p>tripnext@explorenepal.com</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Base price from PHP
-        const basePrice = <?php echo $base_price; ?>;
+        // Base price per person from PHP
+        const basePricePerPerson = <?php echo $base_price_per_person; ?>;
+        const tripDurationDays = <?php echo $trip_duration_days; ?>;
+        
+        // Get form elements
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
         const travelersSelect = document.getElementById('travelers');
         const packageSelect = document.getElementById('package');
         const hotelSelect = document.getElementById('hotel');
         const transportSelect = document.getElementById('transport');
         const bookButton = document.getElementById('bookNowBtn');
         const priceInput = document.getElementById('final_price');
-
-        // Hotel price multipliers (per night, 4 nights stay) - SAME AS STATIC
-        const hotelPrices = {
-            'basic': 400 * 4,
-            '3star': 1800 * 4,
-            '4star': 3500 * 4,
-            '5star': 7000 * 4,
-            'luxury': 10000 * 4
-        };
-
-        // Transport price multipliers - SAME AS STATIC
-        const transportPrices = {
-            'bus': 1200,
-            'air': 7500,
-            'private': 10000,
-            'jeep': 2500
-        };
-
+        
         // Package multipliers
         const packageMultipliers = {
-            'Basic Pilgrimage (Rs.21,480)': 1,
-            'Standard Package (Rs.28,500)': 1.3,
-            'Premium Experience (Rs.35,000)': 1.6
+            'Basic Package': 1.0,
+            'Standard Package': 1.3,
+            'Premium Package': 1.6
         };
-
-        function updatePrice() {
-            const travelers = parseInt(travelersSelect.value) || 1;
-            const packageType = packageSelect.value;
-            const hotelType = hotelSelect.value;
-            const transportType = transportSelect.value;
-            
-            let packageMultiplier = packageMultipliers[packageType] || 1;
-            
-            // Calculate base price
-            const calculatedBasePrice = basePrice * travelers * packageMultiplier;
-            
-            // Add hotel cost
-            const hotelCost = (hotelPrices[hotelType] || 0) * travelers;
-            
-            // Add transport cost
-            const transportCost = (transportPrices[transportType] || 0) * travelers;
-            
-            // Total price
-            const totalPrice = Math.round(calculatedBasePrice + hotelCost + transportCost);
-            
-            bookButton.textContent = `Book Now - RS.${totalPrice.toLocaleString()}`;
-            priceInput.value = totalPrice;
+        
+        // Hotel multipliers
+        const hotelMultipliers = {
+            'Basic Hotel': 1.0,
+            '3-Star Hotel': 1.4,
+            '4-Star Hotel': 1.8,
+            '5-Star Hotel': 2.3,
+            'Luxury Resort': 3.0
+        };
+        
+        // Transport multipliers
+        const transportMultipliers = {
+            'Bus': 1.0,
+            'Private Car': 1.5,
+            'Jeep': 1.3,
+            'Flight': 2.0
+        };
+        
+        // Function to format price in RS.XX,XXX format
+        function formatPrice(amount) {
+            return 'RS.' + Math.round(amount).toLocaleString('en-IN');
         }
-
+        
+        // Function to calculate total price
+        function calculateTotalPrice() {
+            const travelers = parseInt(travelersSelect.value) || 1;
+            const packageMultiplier = packageMultipliers[packageSelect.value] || 1.0;
+            const hotelMultiplier = hotelMultipliers[hotelSelect.value] || 1.0;
+            const transportMultiplier = transportMultipliers[transportSelect.value] || 1.0;
+            
+            // Calculate per person price with all multipliers
+            const perPersonPrice = basePricePerPerson * packageMultiplier * hotelMultiplier * transportMultiplier;
+            
+            // Calculate total for all travelers
+            const totalPrice = perPersonPrice * travelers;
+            
+            return {
+                perPerson: perPersonPrice,
+                total: totalPrice,
+                travelers: travelers
+            };
+        }
+        
+        // Function to update price display
+        function updatePrice() {
+            const priceData = calculateTotalPrice();
+            
+            // Update button text
+            bookButton.textContent = `Book Now - ${formatPrice(priceData.total)}`;
+            
+            // Update hidden input with total price
+            priceInput.value = priceData.total;
+        }
+        
+        // Set minimum date for start date to today
+        const today = new Date().toISOString().split('T')[0];
+        startDateInput.min = today;
+        
+        // WHEN START DATE IS SELECTED - Calculate and show end date
+        startDateInput.addEventListener('change', function() {
+            if (this.value) {
+                const startDate = new Date(this.value);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + (tripDurationDays - 1));
+                
+                // Format end date as YYYY-MM-DD
+                const year = endDate.getFullYear();
+                const month = String(endDate.getMonth() + 1).padStart(2, '0');
+                const day = String(endDate.getDate()).padStart(2, '0');
+                const formattedEndDate = `${year}-${month}-${day}`;
+                
+                // Set end date
+                endDateInput.value = formattedEndDate;
+            }
+        });
+        
+        // Add event listeners for price calculation
         travelersSelect.addEventListener('change', updatePrice);
         packageSelect.addEventListener('change', updatePrice);
         hotelSelect.addEventListener('change', updatePrice);
         transportSelect.addEventListener('change', updatePrice);
-
-        // Set minimum date to today
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('start_date').min = today;
-
-        // Automatically calculate end date (based on itinerary length)
-        document.getElementById('start_date').addEventListener('change', function() {
-            if (this.value) {
-                const startDate = new Date(this.value);
-                const endDate = new Date(startDate);
-                // Add days based on itinerary length (default 4 nights/5 days)
-                const itineraryDays = <?php echo max(count($itinerary) - 1, 4); ?>;
-                endDate.setDate(endDate.getDate() + itineraryDays);
-                
-                // Format to YYYY-MM-DD
-                const endDateString = endDate.toISOString().split('T')[0];
-                document.getElementById('end_date').value = endDateString;
-                
-                // Update price based on new dates if needed
-                updatePrice();
-            }
-        });
-
+        
         // Check URL for success/error parameters
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('booking') === 'success') {
@@ -773,9 +833,15 @@ $base_price = intval(str_replace(['RS.', ',', ' ', 'Rs.', 'rs.', '₹', 'रू'
             document.getElementById('errorMessage').style.display = 'block';
             document.getElementById('errorMessage').scrollIntoView({ behavior: 'smooth' });
         }
-
+        
+        // If start date is set from search, trigger end date calculation
+        if (startDateInput.value) {
+            const event = new Event('change');
+            startDateInput.dispatchEvent(event);
+        }
+        
         // Initialize price calculation
-        updatePrice();
+        setTimeout(updatePrice, 100);
     </script>
 </body>
 </html>

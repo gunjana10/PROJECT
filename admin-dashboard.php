@@ -1,27 +1,167 @@
 <?php
 session_start();
 include("db.php");
-if (!isset($_SESSION['id']) || $_SESSION['role'] != 'admin') header("Location: signin.php");
+include("notification_helper.php");
+
+if (!isset($_SESSION['id']) || $_SESSION['role'] != 'admin') {
+    header("Location: signin.php");
+    exit();
+}
+
+$admin_id = $_SESSION['id'];
+$admin = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM users WHERE id='$admin_id'"));
 
 $page = $_GET['page'] ?? 'dashboard';
 $search = trim($_GET['search'] ?? '');
 
+// Handle AJAX notification request
+if (isset($_GET['ajax']) && $_GET['ajax'] == 'get_notifications') {
+    header('Content-Type: application/json');
+    
+    $notifications = NotificationHelper::getRecent($conn, $admin_id, 'admin', 10);
+    $notifications_array = [];
+    
+    while ($notif = mysqli_fetch_assoc($notifications)) {
+        // Format time
+        $created = strtotime($notif['created_at']);
+        $now = time();
+        $diff = $now - $created;
+        
+        if ($diff < 60) {
+            $time_ago = "Just now";
+        } elseif ($diff < 3600) {
+            $minutes = floor($diff / 60);
+            $time_ago = $minutes . " min" . ($minutes > 1 ? "s" : "") . " ago";
+        } elseif ($diff < 86400) {
+            $hours = floor($diff / 3600);
+            $time_ago = $hours . " hour" . ($hours > 1 ? "s" : "") . " ago";
+        } elseif ($diff < 604800) {
+            $days = floor($diff / 86400);
+            $time_ago = $days . " day" . ($days > 1 ? "s" : "") . " ago";
+        } else {
+            $time_ago = date('M d', $created);
+        }
+        
+        // Get icon based on type
+        $icon = 'fa-bell';
+        $bg_color = '#6a11cb';
+        
+        switch($notif['type']) {
+            case 'booking_created':
+                $icon = 'fa-plus-circle';
+                $bg_color = '#28a745';
+                break;
+            case 'booking_edited':
+                $icon = 'fa-edit';
+                $bg_color = '#ffc107';
+                break;
+            case 'booking_cancelled':
+                $icon = 'fa-times-circle';
+                $bg_color = '#dc3545';
+                break;
+            case 'booking_confirmed':
+                $icon = 'fa-check-circle';
+                $bg_color = '#17a2b8';
+                break;
+        }
+        
+        $notifications_array[] = [
+            'id' => $notif['id'],
+            'title' => htmlspecialchars($notif['title']),
+            'message' => htmlspecialchars($notif['message']),
+            'time_ago' => $time_ago,
+            'icon' => $icon,
+            'bg_color' => $bg_color,
+            'related_id' => $notif['related_id'],
+            'created_at' => $notif['created_at']
+        ];
+    }
+    
+    echo json_encode([
+        'notifications' => $notifications_array
+    ]);
+    exit();
+}
+
 // Handle actions
 if (isset($_POST['action'])) {
     $id = mysqli_real_escape_string($conn, $_POST['booking_id'] ?? $_POST['user_id'] ?? $_POST['destination_id'] ?? '');
-    $actions = [
-        'confirm_booking' => "UPDATE bookings SET status='confirmed' WHERE id='$id'",
-        'cancel_booking' => "UPDATE bookings SET status='cancelled' WHERE id='$id'",
-        'delete_booking' => "DELETE FROM bookings WHERE id='$id'",
-        'toggle_user' => "UPDATE users SET status = IF(status='active','inactive','active') WHERE id='$id'",
-        'delete_user' => "DELETE FROM users WHERE id='$id'",
-        'delete_destination' => "DELETE FROM destinations WHERE id='$id'"
-    ];
-    if (isset($actions[$_POST['action']])) {
-        mysqli_query($conn, $actions[$_POST['action']]);
-        $messages = ["✅ Booking confirmed!","⚠️ Booking cancelled!","🗑️ Booking deleted!","🔄 User status updated!","🗑️ User deleted!","🗑️ Destination deleted!"];
-        $_SESSION['success'] = $messages[array_search($_POST['action'], array_keys($actions))];
+    
+    // Confirm Booking
+    if ($_POST['action'] == 'confirm_booking') {
+        // Get booking details before updating
+        $booking_query = mysqli_query($conn, "SELECT * FROM bookings WHERE id='$id'");
+        $booking = mysqli_fetch_assoc($booking_query);
+        
+        // Update booking status
+        mysqli_query($conn, "UPDATE bookings SET status='confirmed' WHERE id='$id'");
+        
+        // Get user ID from email
+        $user_query = mysqli_query($conn, "SELECT id FROM users WHERE email='{$booking['email']}'");
+        if ($user_row = mysqli_fetch_assoc($user_query)) {
+            // Create notification for user
+            NotificationHelper::create(
+                $conn,
+                $user_row['id'],
+                'user',
+                'booking_confirmed',
+                'Booking Confirmed',
+                "Your booking #$id has been confirmed successfully.",
+                $id
+            );
+        }
+        
+        $_SESSION['success'] = "Booking confirmed!";
     }
+    
+    // Cancel Booking (by admin)
+    elseif ($_POST['action'] == 'cancel_booking') {
+        // Get booking details before updating
+        $booking_query = mysqli_query($conn, "SELECT * FROM bookings WHERE id='$id'");
+        $booking = mysqli_fetch_assoc($booking_query);
+        
+        // Update booking status
+        mysqli_query($conn, "UPDATE bookings SET status='cancelled' WHERE id='$id'");
+        
+        // Get user ID from email
+        $user_query = mysqli_query($conn, "SELECT id FROM users WHERE email='{$booking['email']}'");
+        if ($user_row = mysqli_fetch_assoc($user_query)) {
+            // Create notification for user
+            NotificationHelper::create(
+                $conn,
+                $user_row['id'],
+                'user',
+                'booking_cancelled',
+                'Booking Cancelled',
+                "Your booking #$id has been cancelled by admin.",
+                $id
+            );
+        }
+        
+        $_SESSION['success'] = "Booking cancelled!";
+    }
+    
+    elseif ($_POST['action'] == 'delete_booking') {
+        // This action is kept for other parts of admin panel but not used in bookings table
+        mysqli_query($conn, "DELETE FROM bookings WHERE id='$id'");
+        $_SESSION['success'] = "Booking deleted!";
+    }
+    
+    elseif ($_POST['action'] == 'toggle_user') {
+        mysqli_query($conn, "UPDATE users SET status = IF(status='active','inactive','active') WHERE id='$id'");
+        $_SESSION['success'] = "User status updated!";
+    }
+    
+    elseif ($_POST['action'] == 'delete_user') {
+        mysqli_query($conn, "DELETE FROM users WHERE id='$id'");
+        $_SESSION['success'] = "User deleted!";
+    }
+    
+    elseif ($_POST['action'] == 'delete_destination') {
+        mysqli_query($conn, "DELETE FROM destinations WHERE id='$id'");
+        $_SESSION['success'] = "Destination deleted!";
+    }
+    
     header("Location: admin-dashboard.php?page=$page" . ($search ? "&search=".urlencode($search) : ""));
     exit();
 }
@@ -33,13 +173,11 @@ if (isset($_POST['add_destination']) || isset($_POST['edit_destination'])) {
     $price = mysqli_real_escape_string($conn, $_POST['price']);
     $page_link = mysqli_real_escape_string($conn, $_POST['page_link']);
     
-    // NEW FIELDS for destination details
+    // Destination details
     $duration = mysqli_real_escape_string($conn, $_POST['duration'] ?? '5 Days');
     $difficulty = mysqli_real_escape_string($conn, $_POST['difficulty'] ?? 'Easy');
     $best_season = mysqli_real_escape_string($conn, $_POST['best_season'] ?? 'Year-Round');
     $highlights = mysqli_real_escape_string($conn, $_POST['highlights'] ?? '');
-    
-    // Package details
     $package_details = mysqli_real_escape_string($conn, $_POST['package_details'] ?? '');
     
     // Handle itinerary as JSON
@@ -72,7 +210,7 @@ if (isset($_POST['add_destination']) || isset($_POST['edit_destination'])) {
     $image_url = '';
     if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
         $allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
-        $max_size = 5 * 1024 * 1024; // 5MB
+        $max_size = 5 * 1024 * 1024;
         
         if (in_array($_FILES['image']['type'], $allowed_types) && $_FILES['image']['size'] <= $max_size) {
             $upload_dir = 'uploads/destinations/';
@@ -87,32 +225,29 @@ if (isset($_POST['add_destination']) || isset($_POST['edit_destination'])) {
             if (move_uploaded_file($_FILES['image']['tmp_name'], $file_path)) {
                 $image_url = $file_path;
                 
-                // If editing and has old image, delete it
                 if (isset($_POST['edit_destination']) && isset($_POST['old_image']) && !empty($_POST['old_image']) && file_exists($_POST['old_image'])) {
                     unlink($_POST['old_image']);
                 }
             } else {
-                $_SESSION['error'] = "❌ Failed to upload image.";
+                $_SESSION['error'] = "Failed to upload image.";
                 header("Location: admin-dashboard.php?page=destinations");
                 exit();
             }
         } else {
-            $_SESSION['error'] = "❌ Invalid image file. Only JPG, PNG, GIF, WebP up to 5MB allowed.";
+            $_SESSION['error'] = "Invalid image file. Only JPG, PNG, GIF, WebP up to 5MB allowed.";
             header("Location: admin-dashboard.php?page=destinations");
             exit();
         }
     } elseif (isset($_POST['old_image']) && !empty($_POST['old_image'])) {
-        // Keep old image if no new image uploaded
         $image_url = $_POST['old_image'];
     } else {
-        // Use image_url from form if no file upload
         $image_url = mysqli_real_escape_string($conn, $_POST['image_url'] ?? '');
     }
     
     if (isset($_POST['add_destination'])) {
         $query = "INSERT INTO destinations (name, description, price, image_url, page_link, duration, difficulty, best_season, highlights, package_details, itinerary, included_services, not_included, hotel_options, transport_options) 
                   VALUES ('$name', '$description', '$price', '$image_url', '$page_link', '$duration', '$difficulty', '$best_season', '$highlights', '$package_details', '$itinerary_json', '$included_services', '$not_included', '$hotel_options', '$transport_options')";
-        $_SESSION['success'] = "✅ Destination added successfully!";
+        $_SESSION['success'] = "Destination added successfully!";
     } else {
         $id = mysqli_real_escape_string($conn, $_POST['id']);
         $query = "UPDATE destinations SET 
@@ -133,10 +268,10 @@ if (isset($_POST['add_destination']) || isset($_POST['edit_destination'])) {
                   transport_options='$transport_options',
                   updated_at=NOW() 
                   WHERE id='$id'";
-        $_SESSION['success'] = "✅ Destination updated successfully!";
+        $_SESSION['success'] = "Destination updated successfully!";
     }
     
-    if (!mysqli_query($conn, $query)) $_SESSION['error'] = "❌ Error: " . mysqli_error($conn);
+    if (!mysqli_query($conn, $query)) $_SESSION['error'] = "Error: " . mysqli_error($conn);
     header("Location: admin-dashboard.php?page=destinations");
     exit();
 }
@@ -147,7 +282,6 @@ function getStat($conn, $query) {
     return $res ? reset($res) : 0; 
 }
 
-// Fix: Handle empty/null status in stats
 $stats = [
     'bookings' => getStat($conn, "SELECT COUNT(*) FROM bookings"),
     'pending' => getStat($conn, "SELECT COUNT(*) FROM bookings WHERE status='pending' OR status IS NULL OR status = ''"),
@@ -158,6 +292,9 @@ $stats = [
     'active' => getStat($conn, "SELECT COUNT(*) FROM users WHERE role='user' AND status='active'"),
     'destinations' => getStat($conn, "SELECT COUNT(*) FROM destinations")
 ];
+
+// Get all notifications for admin
+$all_notifications = NotificationHelper::getAll($conn, $admin_id, 'admin', 50);
 
 // Get data for current page
 $data = [];
@@ -174,7 +311,10 @@ elseif ($page == 'destinations') {
     $where = $search ? " WHERE name LIKE '%".mysqli_real_escape_string($conn,$search)."%' OR description LIKE '%$search%'" : "";
     $data['destinations'] = mysqli_query($conn, "SELECT * FROM destinations $where ORDER BY created_at DESC");
 }
-elseif ($page == 'dashboard') $data['recent'] = mysqli_query($conn, "SELECT * FROM bookings ORDER BY booking_date DESC LIMIT 5");
+elseif ($page == 'dashboard') {
+    $data['recent'] = mysqli_query($conn, "SELECT * FROM bookings ORDER BY booking_date DESC LIMIT 5");
+}
+elseif ($page == 'notifications') $data['notifications'] = NotificationHelper::getAll($conn, $admin_id, 'admin', 100);
 
 // Get destination for edit
 $edit_destination = null;
@@ -183,7 +323,6 @@ if (isset($_GET['edit'])) {
     $result = mysqli_query($conn, "SELECT * FROM destinations WHERE id='$edit_id'");
     $edit_destination = mysqli_fetch_assoc($result);
     
-    // Parse itinerary JSON if exists
     if ($edit_destination && !empty($edit_destination['itinerary'])) {
         $edit_itinerary = json_decode($edit_destination['itinerary'], true);
         $edit_destination['itinerary_array'] = $edit_itinerary ?: [];
@@ -197,7 +336,7 @@ if (isset($_GET['edit'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>Admin Dashboard - TripNext</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root { 
@@ -211,18 +350,21 @@ if (isset($_GET['edit'])) {
             --text-dark: #2d3748; 
             --text-light: #718096; 
         }
+        
         * { 
             margin: 0; 
             padding: 0; 
             box-sizing: border-box; 
             font-family: 'Segoe UI', sans-serif; 
         }
+        
         body { 
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
             display: flex; 
             min-height: 100vh; 
         }
         
+        /* Sidebar Styles */
         .sidebar { 
             width: 280px; 
             background: rgba(30, 30, 45, 0.95); 
@@ -232,18 +374,21 @@ if (isset($_GET['edit'])) {
             border-right: 1px solid rgba(255, 255, 255, 0.1); 
             box-shadow: 5px 0 25px rgba(0, 0, 0, 0.2); 
         }
+        
         .sidebar-header { 
             padding: 0 25px 25px; 
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
             margin-bottom: 25px; 
             color: white; 
         }
+        
         .sidebar-header h2 { 
             font-size: 1.6rem; 
             display: flex; 
             align-items: center; 
             gap: 12px; 
         }
+        
         .admin-info { 
             display: flex; 
             align-items: center; 
@@ -253,6 +398,7 @@ if (isset($_GET['edit'])) {
             border-radius: 12px; 
             margin: 0 25px 25px; 
         }
+        
         .admin-avatar { 
             width: 45px; 
             height: 45px; 
@@ -265,13 +411,16 @@ if (isset($_GET['edit'])) {
             font-weight: bold; 
             font-size: 1.2rem; 
         }
+        
         .nav-menu { 
             list-style: none; 
             padding: 0 15px; 
         }
+        
         .nav-item { 
             margin-bottom: 8px; 
         }
+        
         .nav-link { 
             display: flex; 
             align-items: center; 
@@ -280,28 +429,45 @@ if (isset($_GET['edit'])) {
             text-decoration: none; 
             border-radius: 12px; 
             transition: all 0.3s ease; 
-            border-left: 3px solid transparent; 
+            position: relative;
         }
+        
         .nav-link:hover { 
             background: rgba(255, 255, 255, 0.08); 
             color: white; 
             transform: translateX(5px); 
         }
+        
         .nav-link.active { 
             background: linear-gradient(135deg, rgba(106, 17, 203, 0.2), rgba(37, 117, 252, 0.2)); 
             color: white; 
-            border-left: 3px solid #00d2ff; 
         }
+        
         .nav-link i { 
             width: 24px; 
             margin-right: 12px; 
         }
         
+        .notification-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--danger);
+            border-radius: 50%;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+        }
+        
+        /* Main Content */
         .main-content { 
             flex: 1; 
             margin-left: 280px; 
             padding: 30px; 
         }
+        
+        /* Header with Notification Bell */
         .top-header { 
             background: white; 
             padding: 25px 30px; 
@@ -312,11 +478,13 @@ if (isset($_GET['edit'])) {
             justify-content: space-between; 
             align-items: center; 
         }
+        
         .page-title { 
             display: flex; 
             align-items: center; 
             gap: 15px; 
         }
+        
         .page-title h1 { 
             font-size: 2rem; 
             font-weight: 700; 
@@ -325,6 +493,7 @@ if (isset($_GET['edit'])) {
             -webkit-text-fill-color: transparent; 
             background-clip: text; 
         }
+        
         .page-icon { 
             width: 60px; 
             height: 60px; 
@@ -338,54 +507,201 @@ if (isset($_GET['edit'])) {
             box-shadow: 0 8px 20px rgba(106, 17, 203, 0.3); 
         }
         
+        /* Notification Bell */
+        .notification-bell {
+            position: relative;
+            margin-right: 20px;
+            cursor: pointer;
+        }
+        
+        .bell-icon {
+            font-size: 1.5rem;
+            color: var(--primary);
+            transition: all 0.3s ease;
+        }
+        
+        .bell-icon:hover {
+            transform: scale(1.1);
+            color: var(--secondary);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .notification-dropdown {
+            position: absolute;
+            top: 40px;
+            right: -20px;
+            width: 350px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .notification-dropdown.active {
+            display: block;
+        }
+        
+        .notification-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .notification-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+        
+        .view-all-link {
+            color: white;
+            text-decoration: none;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .view-all-link:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+        
+        .notification-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .notification-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .notification-item:hover {
+            background: rgba(106, 17, 203, 0.05);
+        }
+        
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .notification-content {
+            flex: 1;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-dark);
+        }
+        
+        .notification-message {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+        
+        .notification-time {
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+        
+        .notification-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-light);
+        }
+        
+        .notification-empty i {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 15px;
+        }
+        
+        /* Stats Grid - REMOVED THE LINE DESIGN */
         .stats-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
-            gap: 25px; 
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
+            gap: 20px; 
             margin-bottom: 40px; 
         }
+        
         .stat-card { 
             background: white; 
-            padding: 30px; 
-            border-radius: 20px; 
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); 
+            padding: 20px 25px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06); 
             transition: all 0.3s ease; 
-            position: relative; 
         }
+        
         .stat-card:hover { 
-            transform: translateY(-10px); 
+            transform: translateY(-5px); 
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.1); 
         }
-        .stat-card::before { 
-            content: ''; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 5px; 
-            background: linear-gradient(90deg, var(--primary), var(--secondary)); 
-        }
+        
         .stat-header { 
             display: flex; 
             justify-content: space-between; 
-            align-items: flex-start; 
-            margin-bottom: 20px; 
+            align-items: center; 
+            margin-bottom: 10px; 
         }
+        
         .stat-value { 
-            font-size: 2.5rem; 
-            font-weight: 800; 
+            font-size: 2rem; 
+            font-weight: 700; 
             color: var(--dark); 
+            margin-top: 5px;
         }
+        
         .stat-icon { 
-            width: 60px; 
-            height: 60px; 
-            border-radius: 15px; 
+            width: 50px; 
+            height: 50px; 
+            border-radius: 12px; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            font-size: 1.8rem; 
+            font-size: 1.5rem; 
             color: white; 
         }
         
+        .stat-label {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Search */
         .search-container { 
             background: white; 
             padding: 25px; 
@@ -393,11 +709,13 @@ if (isset($_GET['edit'])) {
             margin-bottom: 30px; 
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); 
         }
+        
         .search-box { 
             display: flex; 
             gap: 15px; 
             align-items: center; 
         }
+        
         .search-input { 
             flex: 1; 
             padding: 16px 25px; 
@@ -406,28 +724,14 @@ if (isset($_GET['edit'])) {
             font-size: 1rem; 
             background: var(--light); 
         }
+        
         .search-input:focus { 
             outline: none; 
             border-color: var(--primary); 
             box-shadow: 0 0 0 4px rgba(106, 17, 203, 0.1); 
         }
-        .search-btn { 
-            background: linear-gradient(135deg, var(--primary), var(--secondary)); 
-            color: white; 
-            border: none; 
-            padding: 16px 30px; 
-            border-radius: 15px; 
-            cursor: pointer; 
-            font-weight: 600; 
-            transition: all 0.3s ease; 
-            display: flex; 
-            align-items: center; 
-            gap: 10px; 
-        }
-        .search-btn:hover { 
-            transform: translateY(-3px); 
-        }
         
+        /* Tables */
         .table-container { 
             background: white; 
             border-radius: 20px; 
@@ -435,6 +739,7 @@ if (isset($_GET['edit'])) {
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); 
             margin-bottom: 40px; 
         }
+        
         .table-header { 
             padding: 25px 30px; 
             border-bottom: 1px solid #e2e8f0; 
@@ -442,10 +747,12 @@ if (isset($_GET['edit'])) {
             justify-content: space-between; 
             align-items: center; 
         }
+        
         table { 
             width: 100%; 
             border-collapse: collapse; 
         }
+        
         th { 
             padding: 15px 20px; 
             text-align: left; 
@@ -454,14 +761,51 @@ if (isset($_GET['edit'])) {
             border-bottom: 2px solid #e2e8f0; 
             background: #f8fafc; 
         }
+        
         td { 
             padding: 12px 20px; 
             border-bottom: 1px solid #f1f5f9; 
         }
+        
         tbody tr:hover { 
             background: #f8fafc; 
         }
         
+        /* Notifications Page */
+        .notifications-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        .notifications-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .notification-item-full {
+            padding: 20px 25px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .notification-item-full:hover {
+            background: rgba(106, 17, 203, 0.05);
+        }
+        
+        .notification-date-group {
+            background: #f8fafc;
+            padding: 15px 25px;
+            font-weight: 600;
+            color: var(--primary);
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        /* Alerts */
         .alert-success, .alert-error { 
             padding: 20px 25px; 
             border-radius: 15px; 
@@ -470,135 +814,152 @@ if (isset($_GET['edit'])) {
             justify-content: space-between; 
             align-items: center; 
         }
+        
         .alert-success { 
             background: linear-gradient(135deg, #d4edda, #c3e6cb); 
             color: #155724; 
             border-left: 5px solid #28a745; 
         }
+        
         .alert-error { 
             background: linear-gradient(135deg, #f8d7da, #f5b7b1); 
             color: #721c24; 
             border-left: 5px solid #dc3545; 
         }
         
+        /* Buttons */
         .btn { 
-            padding: 10px 20px; 
+            padding: 8px 16px; 
             border: none; 
-            border-radius: 12px; 
+            border-radius: 8px; 
             cursor: pointer; 
             font-weight: 600; 
             transition: all 0.3s ease; 
             display: inline-flex; 
             align-items: center; 
-            gap: 8px; 
+            gap: 6px; 
             text-decoration: none; 
+            font-size: 0.85rem;
         }
+        
         .btn-primary { 
             background: linear-gradient(135deg, var(--primary), var(--secondary)); 
             color: white; 
         }
+        
         .btn-success { 
             background: linear-gradient(135deg, #28a745, #20c997); 
             color: white; 
         }
+        
         .btn-danger { 
             background: linear-gradient(135deg, #dc3545, #fd7e14); 
             color: white; 
         }
+        
         .btn-warning { 
             background: linear-gradient(135deg, #ffc107, #ffa726); 
             color: #212529; 
         }
+        
         .btn-secondary { 
             background: #6c757d; 
             color: white; 
         }
+        
         .btn-sm { 
-            padding: 6px 12px; 
-            font-size: 0.85rem; 
+            padding: 5px 12px; 
+            font-size: 0.75rem; 
         }
         
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Status Badges */
         .status-badge { 
-            padding: 6px 12px; 
+            padding: 5px 12px; 
             border-radius: 20px; 
-            font-size: 0.8rem; 
+            font-size: 0.75rem; 
             font-weight: 600; 
             display: inline-flex; 
             align-items: center; 
             gap: 5px; 
         }
+        
         .status-pending { 
             background: linear-gradient(135deg, #fff3cd, #ffeaa7); 
             color: #856404; 
         }
+        
         .status-confirmed { 
             background: linear-gradient(135deg, #d1ecf1, #a8e6cf); 
             color: #0c5460; 
         }
+        
         .status-cancelled { 
             background: linear-gradient(135deg, #f8d7da, #f5b7b1); 
             color: #721c24; 
         }
+        
         .status-active { 
             background: linear-gradient(135deg, #d4edda, #c5e1a5); 
             color: #155724; 
         }
+        
         .status-inactive { 
             background: linear-gradient(135deg, #f8d7da, #f5b7b1); 
             color: #721c24; 
         }
         
-        .info-badge { 
-            display: inline-block; 
-            padding: 4px 10px; 
-            border-radius: 12px; 
-            font-size: 0.8rem; 
+        /* Forms */
+        .form-group { 
+            margin-bottom: 20px; 
+        }
+        
+        .form-label { 
+            display: block; 
+            margin-bottom: 8px; 
             font-weight: 600; 
-            margin: 2px 0; 
-        }
-        .package-badge { 
-            background: #e3f2fd; 
-            color: #1565c0; 
-        }
-        .hotel-badge { 
-            background: #f3e5f5; 
-            color: #7b1fa2; 
-        }
-        .transport-badge { 
-            background: #e8f5e8; 
-            color: #2e7d32; 
-        }
-        .traveler-badge { 
-            background: #fff3e0; 
-            color: #ef6c00; 
+            color: var(--text-dark); 
         }
         
-        .modal-overlay { 
-            display: none; 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
+        .form-input { 
             width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.5); 
-            z-index: 1001; 
-            justify-content: center; 
-            align-items: center; 
-        }
-        .modal-content { 
-            background: white; 
-            border-radius: 20px; 
-            padding: 30px; 
-            max-width: 600px; 
-            width: 90%; 
-            max-height: 80vh; 
-            overflow-y: auto; 
+            padding: 14px 18px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 12px; 
+            font-size: 1rem; 
         }
         
-        /* Image upload styles */
+        .form-input:focus { 
+            outline: none; 
+            border-color: var(--primary); 
+            box-shadow: 0 0 0 4px rgba(106, 17, 203, 0.1); 
+        }
+        
+        .form-textarea { 
+            width: 100%; 
+            padding: 14px 18px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 12px; 
+            font-size: 1rem; 
+            min-height: 120px; 
+            resize: vertical; 
+        }
+        
+        .form-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+        
+        /* Image Upload */
         .image-upload-container { 
             margin: 15px 0; 
         }
+        
         .image-preview { 
             width: 200px; 
             height: 150px; 
@@ -611,14 +972,17 @@ if (isset($_GET['edit'])) {
             margin-top: 10px; 
             background: #f8f9fa; 
         }
+        
         .image-preview img { 
             max-width: 100%; 
             max-height: 100%; 
             object-fit: cover; 
         }
+        
         .file-input { 
             display: none; 
         }
+        
         .upload-btn { 
             background: var(--primary); 
             color: white; 
@@ -630,66 +994,8 @@ if (isset($_GET['edit'])) {
             gap: 8px; 
             margin-top: 10px; 
         }
-        .image-info { 
-            font-size: 0.85rem; 
-            color: var(--text-light); 
-            margin-top: 5px; 
-        }
         
-        .action-buttons { 
-            display: flex; 
-            gap: 8px; 
-            flex-wrap: wrap; 
-        }
-        
-        /* Form styles for destination management */
-        .form-group { 
-            margin-bottom: 20px; 
-        }
-        .form-label { 
-            display: block; 
-            margin-bottom: 8px; 
-            font-weight: 600; 
-            color: var(--text-dark); 
-        }
-        .form-input { 
-            width: 100%; 
-            padding: 14px 18px; 
-            border: 2px solid #e2e8f0; 
-            border-radius: 12px; 
-            font-size: 1rem; 
-        }
-        .form-input:focus { 
-            outline: none; 
-            border-color: var(--primary); 
-            box-shadow: 0 0 0 4px rgba(106, 17, 203, 0.1); 
-        }
-        .form-textarea { 
-            width: 100%; 
-            padding: 14px 18px; 
-            border: 2px solid #e2e8f0; 
-            border-radius: 12px; 
-            font-size: 1rem; 
-            min-height: 120px; 
-            resize: vertical; 
-        }
-        .form-textarea:focus { 
-            outline: none; 
-            border-color: var(--primary); 
-            box-shadow: 0 0 0 4px rgba(106, 17, 203, 0.1); 
-        }
-        .form-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px; 
-        }
-        .form-help { 
-            font-size: 0.85rem; 
-            color: var(--text-light); 
-            margin-top: 5px; 
-        }
-        
-        /* Itinerary builder styles */
+        /* Itinerary Builder */
         .itinerary-day-form { 
             background: #f8f9fa; 
             border: 1px solid #e2e8f0; 
@@ -697,18 +1003,21 @@ if (isset($_GET['edit'])) {
             padding: 15px; 
             margin-bottom: 15px; 
         }
+        
         .itinerary-header { 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
             margin-bottom: 10px; 
         }
+        
         .itinerary-day-input { 
             width: 100%; 
             padding: 10px; 
             border: 1px solid #ddd; 
             border-radius: 5px; 
         }
+        
         .itinerary-desc-input { 
             width: 100%; 
             padding: 10px; 
@@ -718,6 +1027,44 @@ if (isset($_GET['edit'])) {
             resize: vertical; 
         }
         
+        .action-buttons { 
+            display: flex; 
+            gap: 8px; 
+            flex-wrap: wrap; 
+        }
+        
+        .empty { 
+            text-align: center; 
+            padding: 60px 40px; 
+            color: var(--text-light); 
+        }
+        
+        .empty-icon {
+            font-size: 4rem;
+            opacity: 0.3;
+            margin-bottom: 20px;
+        }
+        
+        /* Booking detail badges - NO ICONS */
+        .booking-detail-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .hotel-badge {
+            background: #e3f2fd;
+            color: #0d47a1;
+        }
+        
+        .transport-badge {
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+        
+        /* Responsive */
         @media (max-width: 992px) { 
             .sidebar { 
                 width: 80px; 
@@ -730,7 +1077,14 @@ if (isset($_GET['edit'])) {
             .main-content { 
                 margin-left: 80px; 
             } 
+            .notification-dropdown {
+                right: -100px;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
+        
         @media (max-width: 768px) { 
             .main-content { 
                 padding: 20px; 
@@ -749,9 +1103,23 @@ if (isset($_GET['edit'])) {
                 gap: 20px; 
             } 
             table { 
-                min-width: 1200px; 
+                min-width: 1400px; 
             }
             .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .notification-dropdown {
+                right: -150px;
+                width: 300px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .notification-dropdown {
+                right: -100px;
+                width: 280px;
+            }
+            .stats-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -776,13 +1144,20 @@ if (isset($_GET['edit'])) {
                 'dashboard' => ['fas fa-tachometer-alt', 'Dashboard'],
                 'bookings' => ['fas fa-calendar-check', 'Bookings'],
                 'users' => ['fas fa-users-cog', 'User Management'],
-                'destinations' => ['fas fa-map-marked-alt', 'Destinations']
+                'destinations' => ['fas fa-map-marked-alt', 'Destinations'],
+                'notifications' => ['fas fa-bell', 'Notifications']
             ];
-            foreach($pages as $p => $icon): ?>
+            
+            foreach($pages as $p => $icon): 
+                $has_notification_dot = ($p == 'notifications' && mysqli_num_rows($all_notifications) > 0) ? true : false;
+            ?>
             <li class="nav-item">
                 <a href="?page=<?php echo $p; ?>" class="nav-link <?php echo $page == $p ? 'active' : ''; ?>">
                     <i class="<?php echo $icon[0]; ?>"></i>
                     <span><?php echo $icon[1]; ?></span>
+                    <?php if ($has_notification_dot && $page != 'notifications'): ?>
+                        <span class="notification-dot" style="display: block;"></span>
+                    <?php endif; ?>
                 </a>
             </li>
             <?php endforeach; ?>
@@ -802,7 +1177,8 @@ if (isset($_GET['edit'])) {
                     <i class="fas fa-<?php 
                         echo $page == 'dashboard' ? 'tachometer-alt' : 
                             ($page == 'bookings' ? 'calendar-check' : 
-                            ($page == 'users' ? 'users-cog' : 'map-marked-alt')); 
+                            ($page == 'users' ? 'users-cog' : 
+                            ($page == 'destinations' ? 'map-marked-alt' : 'bell'))); 
                     ?>"></i>
                 </div>
                 <div>
@@ -812,7 +1188,8 @@ if (isset($_GET['edit'])) {
                             'dashboard' => 'Dashboard',
                             'bookings' => 'Booking Management',
                             'users' => 'User Management',
-                            'destinations' => 'Destination Management'
+                            'destinations' => 'Destination Management',
+                            'notifications' => 'Notifications'
                         ][$page] ?? 'Admin Panel'; 
                         ?>
                     </h1>
@@ -822,27 +1199,48 @@ if (isset($_GET['edit'])) {
                             'dashboard' => 'System analytics and overview',
                             'bookings' => 'Manage all travel bookings',
                             'users' => 'Manage system users',
-                            'destinations' => 'Add, edit, and remove destinations'
+                            'destinations' => 'Add, edit, and remove destinations',
+                            'notifications' => 'View all system notifications'
                         ][$page]; 
                         ?>
                     </p>
                 </div>
             </div>
-            <div style="display: flex; gap: 20px;">
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <!-- Notification Bell -->
+                <div class="notification-bell" id="notificationBell">
+                    <i class="fas fa-bell bell-icon"></i>
+                    <span class="notification-badge" id="notificationBadge">0</span>
+                    
+                    <!-- Notification Dropdown -->
+                    <div class="notification-dropdown" id="notificationDropdown">
+                        <div class="notification-header">
+                            <h3><i class="fas fa-bell"></i> Notifications</h3>
+                            <a href="?page=notifications" class="view-all-link">View All</a>
+                        </div>
+                        <div class="notification-list" id="notificationList">
+                            <div class="notification-empty">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>No notifications yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div style="text-align: center; padding: 10px 20px; background: rgba(106, 17, 203, 0.05); border-radius: 10px;">
                     <div style="font-size: 1.4rem; font-weight: 700; color: var(--primary);"><?php echo $stats['bookings']; ?></div>
-                    <div>Bookings</div>
+                    <div style="font-size: 0.85rem; color: var(--text-light);">Total Bookings</div>
                 </div>
                 <div style="text-align: center; padding: 10px 20px; background: rgba(106, 17, 203, 0.05); border-radius: 10px;">
                     <div style="font-size: 1.4rem; font-weight: 700; color: var(--primary);"><?php echo $stats['destinations']; ?></div>
-                    <div>Destinations</div>
+                    <div style="font-size: 0.85rem; color: var(--text-light);">Destinations</div>
                 </div>
             </div>
         </div>
 
         <?php if (isset($_SESSION['success'])): ?>
         <div class="alert-success">
-            <span><?php echo $_SESSION['success']; ?></span>
+            <span><i class="fas fa-check-circle"></i> <?php echo $_SESSION['success']; ?></span>
             <button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; color: #155724; font-size: 1.2rem;">
                 <i class="fas fa-times"></i>
             </button>
@@ -851,127 +1249,154 @@ if (isset($_GET['edit'])) {
         
         <?php if (isset($_SESSION['error'])): ?>
         <div class="alert-error">
-            <span><?php echo $_SESSION['error']; ?></span>
+            <span><i class="fas fa-exclamation-circle"></i> <?php echo $_SESSION['error']; ?></span>
             <button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; color: #721c24; font-size: 1.2rem;">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <?php unset($_SESSION['error']); endif; ?>
 
+        <!-- DASHBOARD PAGE -->
         <?php if ($page == 'dashboard'): ?>
             <div class="stats-grid">
                 <?php 
                 $statCards = [
                     ['Total Bookings', $stats['bookings'], 'fas fa-calendar-alt', 'var(--primary)'],
-                    ['Pending Bookings', $stats['pending'], 'fas fa-clock', 'var(--warning)'],
-                    ['Confirmed Bookings', $stats['confirmed'], 'fas fa-check-circle', 'var(--success)'],
-                    ['Cancelled Bookings', $stats['cancelled'], 'fas fa-times-circle', 'var(--danger)'],
-                    ['Total Revenue', '₹' . number_format($stats['revenue']), 'fas fa-rupee-sign', '#9d4edd'],
-                    ['Total Users', $stats['users'], 'fas fa-user-friends', '#ff6d00'],
+                    ['Pending', $stats['pending'], 'fas fa-clock', 'var(--warning)'],
+                    ['Confirmed', $stats['confirmed'], 'fas fa-check-circle', 'var(--success)'],
+                    ['Cancelled', $stats['cancelled'], 'fas fa-times-circle', 'var(--danger)'],
+                    ['Revenue', 'Rs ' . number_format($stats['revenue']), 'fas fa-rupee-sign', '#9d4edd'],
+                    ['Users', $stats['users'], 'fas fa-user-friends', '#ff6d00'],
                     ['Active Users', $stats['active'], 'fas fa-user-check', '#06d6a0'],
                     ['Destinations', $stats['destinations'], 'fas fa-map-marker-alt', '#118ab2']
                 ];
                 foreach ($statCards as $card): ?>
                 <div class="stat-card">
                     <div class="stat-header">
-                        <div>
-                            <h3 style="color: var(--text-light); font-size: 0.95rem; margin-bottom: 8px;"><?php echo $card[0]; ?></h3>
-                            <div class="stat-value"><?php echo $card[1]; ?></div>
-                        </div>
-                        <div class="stat-icon" style="background: <?php echo $card[3]; ?>">
+                        <span class="stat-label"><?php echo $card[0]; ?></span>
+                        <div class="stat-icon" style="background: <?php echo $card[3]; ?>;">
                             <i class="<?php echo $card[2]; ?>"></i>
                         </div>
                     </div>
+                    <div class="stat-value"><?php echo $card[1]; ?></div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
             <div class="table-container">
-                <div class="table-header"><h3>Recent Bookings</h3></div>
+                <div class="table-header">
+                    <h3><i class="fas fa-history"></i> Recent Bookings</h3>
+                    <a href="?page=bookings" class="btn btn-primary btn-sm">View All</a>
+                </div>
                 <?php if (mysqli_num_rows($data['recent']) > 0): ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Customer</th>
-                            <th>Destination</th>
-                            <th>Package</th>
-                            <th>Hotel</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while ($row = mysqli_fetch_assoc($data['recent'])): 
-                            // Handle empty/null status
-                            $row_status = !empty($row['status']) ? $row['status'] : 'pending';
-                            if ($row_status == 'cancel') $row_status = 'cancelled';
-                        ?>
-                        <tr>
-                            <td>#<?php echo $row['id']; ?></td>
-                            <td>
-                                <div style="font-weight: 600;"><?php echo htmlspecialchars($row['full_name']); ?></div>
-                                <div style="font-size: 0.85rem; color: var(--text-light);">
-                                    <i class="fas fa-envelope"></i> <?php echo htmlspecialchars($row['email']); ?>
-                                </div>
-                            </td>
-                            <td><?php echo htmlspecialchars($row['destination']); ?></td>
-                            <td>
-                                <span class="info-badge package-badge">
-                                    <?php echo htmlspecialchars($row['package'] ?? 'Basic'); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="info-badge hotel-badge">
-                                    <?php echo htmlspecialchars($row['hotel_category'] ?? 'Basic'); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $row_status; ?>">
-                                    <i class="fas fa-circle" style="font-size: 0.6rem;"></i>
-                                    <?php echo ucfirst($row_status); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn btn-sm btn-primary" onclick="viewBookingDetails(<?php echo htmlspecialchars(json_encode($row)); ?>)">
-                                        <i class="fas fa-eye"></i> View
-                                    </button>
-                                    
-                                    <!-- CONFIRM button shows for pending, empty, or cancelled status -->
-                                    <?php if ($row_status == 'pending' || $row_status == 'cancelled' || empty($row['status'])): ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
-                                        <input type="hidden" name="action" value="confirm_booking">
-                                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Confirm booking #<?php echo $row['id']; ?>?')">
-                                            <i class="fas fa-check"></i> Confirm
-                                        </button>
-                                    </form>
-                                    <?php elseif ($row_status == 'confirmed'): ?>
-                                    <!-- CANCEL button for confirmed bookings -->
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
-                                        <input type="hidden" name="action" value="cancel_booking">
-                                        <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
-                                            <i class="fas fa-times"></i> Cancel
-                                        </button>
-                                    </form>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Customer</th>
+                                <th>Destination</th>
+                                <th>Package</th>
+                                <th>Hotel</th>
+                                <th>Transport</th>
+                                <th>Travelers</th>
+                                <th>Dates</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($row = mysqli_fetch_assoc($data['recent'])): 
+                                $row_status = !empty($row['status']) ? $row['status'] : 'pending';
+                                if ($row_status == 'cancel') $row_status = 'cancelled';
+                            ?>
+                            <tr>
+                                <td>#<?php echo $row['id']; ?></td>
+                                <td>
+                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($row['full_name']); ?></div>
+                                    <div style="font-size: 0.85rem; color: var(--text-light);"><?php echo htmlspecialchars($row['email']); ?></div>
+                                </td>
+                                <td><?php echo htmlspecialchars($row['destination']); ?></td>
+                                <td><?php echo htmlspecialchars($row['package'] ?? 'Basic'); ?></td>
+                                <td>
+                                    <?php if (!empty($row['hotel'])): ?>
+                                        <span class="booking-detail-badge hotel-badge">
+                                            <?php echo htmlspecialchars($row['hotel']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-light);">Not selected</span>
                                     <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                                </td>
+                                <td>
+                                    <?php if (!empty($row['transport'])): ?>
+                                        <span class="booking-detail-badge transport-badge">
+                                            <?php echo htmlspecialchars($row['transport']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-light);">Not selected</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo $row['travelers'] ?? 1; ?></td>
+                                <td>
+                                    <div style="font-size: 0.85rem;">
+                                        <?php echo date('d M', strtotime($row['start_date'])); ?> - 
+                                        <?php echo date('d M', strtotime($row['end_date'])); ?>
+                                    </div>
+                                </td>
+                                <td><strong>Rs <?php echo number_format($row['price']); ?></strong></td>
+                                <td>
+                                    <span class="status-badge status-<?php echo $row_status; ?>">
+                                        <?php echo ucfirst($row_status); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <?php if ($row_status == 'pending'): ?>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="confirm_booking">
+                                                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Confirm booking #<?php echo $row['id']; ?>?')">
+                                                    Confirm
+                                                </button>
+                                            </form>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="cancel_booking">
+                                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        <?php elseif ($row_status == 'confirmed'): ?>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="cancel_booking">
+                                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        <?php elseif ($row_status == 'cancelled'): ?>
+                                            <span class="btn btn-sm btn-danger" style="opacity: 0.6; cursor: default;" disabled>
+                                                <i class="fas fa-times-circle"></i> Cancelled
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <?php else: ?>
-                <div style="text-align: center; padding: 60px 40px; color: var(--text-light);">
-                    <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.3;"></i>
+                <div class="empty">
+                    <i class="fas fa-calendar-times empty-icon"></i>
                     <h3>No Bookings Yet</h3>
                     <p>When customers make bookings, they will appear here.</p>
                 </div>
                 <?php endif; ?>
             </div>
 
+        <!-- BOOKINGS PAGE -->
         <?php elseif ($page == 'bookings'): ?>
             <div class="search-container">
                 <h3 style="color: var(--text-dark); margin-bottom: 15px;">
@@ -993,7 +1418,7 @@ if (isset($_GET['edit'])) {
 
             <div class="table-container">
                 <div class="table-header">
-                    <h3>All Bookings</h3>
+                    <h3><i class="fas fa-list"></i> All Bookings</h3>
                     <div style="background: rgba(106, 17, 203, 0.1); color: var(--primary); padding: 8px 16px; border-radius: 20px; font-weight: 600;">
                         <?php echo $stats['bookings']; ?> bookings
                     </div>
@@ -1020,92 +1445,82 @@ if (isset($_GET['edit'])) {
                         </thead>
                         <tbody>
                             <?php while ($row = mysqli_fetch_assoc($data['bookings'])): 
-                                // Handle empty/null status and 'cancel' typo
                                 $row_status = !empty($row['status']) ? $row['status'] : 'pending';
                                 if ($row_status == 'cancel') $row_status = 'cancelled';
                                 $display_status = ucfirst($row_status);
-                                if (empty($row['status'])) $display_status = 'Pending';
                             ?>
                             <tr>
                                 <td>#<?php echo $row['id']; ?></td>
                                 <td>
                                     <div style="font-weight: 600;"><?php echo htmlspecialchars($row['full_name']); ?></div>
                                     <div style="font-size: 0.85rem; color: var(--text-light);">
-                                        <i class="fas fa-envelope"></i> <?php echo htmlspecialchars($row['email']); ?><br>
-                                        <i class="fas fa-phone"></i> <?php echo htmlspecialchars($row['phone']); ?>
+                                        <?php echo htmlspecialchars($row['email']); ?>
                                     </div>
                                 </td>
                                 <td><?php echo htmlspecialchars($row['destination']); ?></td>
+                                <td><?php echo htmlspecialchars($row['package'] ?? 'Basic'); ?></td>
                                 <td>
-                                    <span class="info-badge package-badge">
-                                        <i class="fas fa-box"></i> <?php echo htmlspecialchars($row['package'] ?? 'Basic Pilgrimage'); ?>
-                                    </span>
+                                    <?php if (!empty($row['hotel'])): ?>
+                                        <span class="booking-detail-badge hotel-badge">
+                                            <?php echo htmlspecialchars($row['hotel']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-light);">Not selected</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="info-badge hotel-badge">
-                                        <i class="fas fa-hotel"></i> <?php echo htmlspecialchars($row['hotel_category'] ?? 'Basic Hotel'); ?>
-                                    </span>
+                                    <?php if (!empty($row['transport'])): ?>
+                                        <span class="booking-detail-badge transport-badge">
+                                            <?php echo htmlspecialchars($row['transport']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-light);">Not selected</span>
+                                    <?php endif; ?>
                                 </td>
-                                <td>
-                                    <span class="info-badge transport-badge">
-                                        <i class="fas fa-bus"></i> <?php echo htmlspecialchars($row['transport_type'] ?? 'Bus'); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <!-- FIXED: Changed from $row['num_travelers'] to $row['travelers'] -->
-                                    <span class="info-badge traveler-badge">
-                                        <i class="fas fa-users"></i> <?php echo htmlspecialchars($row['travelers'] ?? 1); ?> pax
-                                    </span>
-                                </td>
+                                <td><?php echo $row['travelers'] ?? 1; ?></td>
                                 <td>
                                     <div style="font-size: 0.85rem;">
-                                        <div><i class="fas fa-calendar-day"></i> <?php echo date('d M', strtotime($row['start_date'])); ?></div>
-                                        <div><i class="fas fa-calendar-check"></i> <?php echo date('d M', strtotime($row['end_date'])); ?></div>
+                                        <?php echo date('d M', strtotime($row['start_date'])); ?> - 
+                                        <?php echo date('d M', strtotime($row['end_date'])); ?>
                                     </div>
                                 </td>
-                                <td><strong style="color: var(--primary);">₹<?php echo number_format($row['price']); ?></strong></td>
+                                <td><strong>Rs <?php echo number_format($row['price']); ?></strong></td>
                                 <td>
                                     <span class="status-badge status-<?php echo $row_status; ?>">
-                                        <i class="fas fa-circle" style="font-size: 0.6rem;"></i>
                                         <?php echo $display_status; ?>
                                     </span>
                                 </td>
                                 <td><?php echo date('d M Y', strtotime($row['booking_date'])); ?></td>
                                 <td>
                                     <div class="action-buttons">
-                                        <!-- VIEW button -->
-                                        <button class="btn btn-sm btn-primary" onclick="viewBookingDetails(<?php echo htmlspecialchars(json_encode($row)); ?>)">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                        
-                                        <!-- CONFIRM button - shows for pending, empty, cancelled, or cancel status -->
-                                        <?php if ($row_status == 'pending' || $row_status == 'cancelled' || empty($row['status'])): ?>
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
-                                            <input type="hidden" name="action" value="confirm_booking">
-                                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Confirm booking #<?php echo $row['id']; ?>?')">
-                                                <i class="fas fa-check"></i> Confirm
-                                            </button>
-                                        </form>
+                                        <?php if ($row_status == 'pending'): ?>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="confirm_booking">
+                                                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Confirm booking #<?php echo $row['id']; ?>?')">
+                                                    Confirm
+                                                </button>
+                                            </form>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="cancel_booking">
+                                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
                                         <?php elseif ($row_status == 'confirmed'): ?>
-                                        <!-- CANCEL button for confirmed bookings -->
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
-                                            <input type="hidden" name="action" value="cancel_booking">
-                                            <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
-                                                <i class="fas fa-times"></i> Cancel
-                                            </button>
-                                        </form>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="action" value="cancel_booking">
+                                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Cancel booking #<?php echo $row['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        <?php elseif ($row_status == 'cancelled'): ?>
+                                            <span class="btn btn-sm btn-danger" style="opacity: 0.6; cursor: default;" disabled>
+                                                <i class="fas fa-times-circle"></i> Cancelled
+                                            </span>
                                         <?php endif; ?>
-                                        
-                                        <!-- DELETE button - Always shows -->
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
-                                            <input type="hidden" name="action" value="delete_booking">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete booking #<?php echo $row['id']; ?>? This action cannot be undone.')">
-                                                <i class="fas fa-trash"></i> Delete
-                                            </button>
-                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -1114,14 +1529,15 @@ if (isset($_GET['edit'])) {
                     </table>
                 </div>
                 <?php else: ?>
-                <div style="text-align: center; padding: 60px 40px; color: var(--text-light);">
-                    <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.3;"></i>
+                <div class="empty">
+                    <i class="fas fa-calendar-times empty-icon"></i>
                     <h3>No Bookings Found</h3>
                     <p><?php echo !empty($search) ? 'No bookings match your search.' : 'No bookings in system.'; ?></p>
                 </div>
                 <?php endif; ?>
             </div>
 
+        <!-- USERS PAGE -->
         <?php elseif ($page == 'users'): ?>
             <div class="search-container">
                 <h3 style="color: var(--text-dark); margin-bottom: 15px;">
@@ -1143,75 +1559,77 @@ if (isset($_GET['edit'])) {
 
             <div class="table-container">
                 <div class="table-header">
-                    <h3>User Management</h3>
+                    <h3><i class="fas fa-users"></i> User Management</h3>
                     <div style="background: rgba(106, 17, 203, 0.1); color: var(--primary); padding: 8px 16px; border-radius: 20px; font-weight: 600;">
                         <?php echo isset($data['users']) ? mysqli_num_rows($data['users']) : 0; ?> users
                     </div>
                 </div>
                 
                 <?php if (isset($data['users']) && mysqli_num_rows($data['users']) > 0): ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Contact</th>
-                            <th>Status</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while ($row = mysqli_fetch_assoc($data['users'])): ?>
-                        <tr>
-                            <td>#<?php echo $row['id']; ?></td>
-                            <td>
-                                <div style="font-weight: 600;"><?php echo htmlspecialchars($row['fullname']); ?></div>
-                            </td>
-                            <td>
-                                <div style="font-weight: 500;"><?php echo htmlspecialchars($row['email']); ?></div>
-                                <div style="font-size: 0.85rem; color: var(--text-light);">
-                                    <i class="fas fa-phone"></i> <?php echo htmlspecialchars($row['phone'] ?? 'Not provided'); ?>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $row['status']; ?>">
-                                    <i class="fas fa-circle" style="font-size: 0.6rem;"></i>
-                                    <?php echo ucfirst($row['status']); ?>
-                                </span>
-                            </td>
-                            <td><?php echo date('d M Y', strtotime($row['created_at'])); ?></td>
-                            <td>
-                                <div style="display: flex; gap: 10px;">
-                                    <form method="POST">
-                                        <input type="hidden" name="user_id" value="<?php echo $row['id']; ?>">
-                                        <input type="hidden" name="action" value="toggle_user">
-                                        <button type="submit" class="btn btn-warning" onclick="return confirm('<?php echo ($row['status'] == 'active' ? 'Deactivate' : 'Activate'); ?> user #<?php echo $row['id']; ?>?')">
-                                            <i class="fas fa-power-off"></i> <?php echo $row['status'] == 'active' ? 'Deactivate' : 'Activate'; ?>
-                                        </button>
-                                    </form>
-                                    <form method="POST">
-                                        <input type="hidden" name="user_id" value="<?php echo $row['id']; ?>">
-                                        <input type="hidden" name="action" value="delete_user">
-                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Delete user #<?php echo $row['id']; ?>?')">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email / Phone</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($row = mysqli_fetch_assoc($data['users'])): ?>
+                            <tr>
+                                <td>#<?php echo $row['id']; ?></td>
+                                <td>
+                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($row['fullname']); ?></div>
+                                </td>
+                                <td>
+                                    <div><?php echo htmlspecialchars($row['email']); ?></div>
+                                    <div style="font-size: 0.85rem; color: var(--text-light);">
+                                        <?php echo htmlspecialchars($row['phone'] ?? 'Not provided'); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-<?php echo $row['status'] ?? 'active'; ?>">
+                                        <?php echo ucfirst($row['status'] ?? 'active'); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo date('d M Y', strtotime($row['created_at'])); ?></td>
+                                <td>
+                                    <div style="display: flex; gap: 10px;">
+                                        <form method="POST">
+                                            <input type="hidden" name="user_id" value="<?php echo $row['id']; ?>">
+                                            <input type="hidden" name="action" value="toggle_user">
+                                            <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('<?php echo ($row['status'] == 'active' ? 'Deactivate' : 'Activate'); ?> user #<?php echo $row['id']; ?>?')">
+                                                <?php echo ($row['status'] ?? 'active') == 'active' ? 'Deactivate' : 'Activate'; ?>
+                                            </button>
+                                        </form>
+                                        <form method="POST">
+                                            <input type="hidden" name="user_id" value="<?php echo $row['id']; ?>">
+                                            <input type="hidden" name="action" value="delete_user">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete user #<?php echo $row['id']; ?>? This action cannot be undone.')">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <?php else: ?>
-                <div style="text-align: center; padding: 60px 40px; color: var(--text-light);">
-                    <i class="fas fa-user-slash" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.3;"></i>
+                <div class="empty">
+                    <i class="fas fa-user-slash empty-icon"></i>
                     <h3>No Users Found</h3>
                     <p><?php echo !empty($search) ? 'No users match your search.' : 'No users registered.'; ?></p>
                 </div>
                 <?php endif; ?>
             </div>
 
+        <!-- DESTINATIONS PAGE -->
         <?php elseif ($page == 'destinations'): ?>
             <!-- Add/Edit Destination Form -->
             <div style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); margin-bottom: 30px;">
@@ -1232,27 +1650,23 @@ if (isset($_GET['edit'])) {
                         <div class="form-group">
                             <label class="form-label">Destination Name *</label>
                             <input type="text" name="name" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['name']) : ''; ?>" required>
-                            <div class="form-help">Name of the destination (e.g., Everest Base Camp)</div>
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label">Price (₹) *</label>
-                            <input type="text" name="price" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['price']) : ''; ?>" required placeholder="RS.45,000">
-                            <div class="form-help">Price format: RS.21,480 or ₹45,000</div>
+                            <label class="form-label">Price (Rs) *</label>
+                            <input type="text" name="price" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['price']) : ''; ?>" required placeholder="Rs 45,000">
                         </div>
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label">Short Description *</label>
                         <textarea name="description" class="form-textarea" required><?php echo $edit_destination ? htmlspecialchars($edit_destination['description']) : ''; ?></textarea>
-                        <div class="form-help">Brief description shown on homepage (2-3 lines)</div>
                     </div>
                     
                     <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label">Duration</label>
                             <input type="text" name="duration" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['duration'] ?? '5 Days') : '5 Days'; ?>" placeholder="5 Days">
-                            <div class="form-help">Trip duration (e.g., 5 Days, 7 Nights)</div>
                         </div>
                         
                         <div class="form-group">
@@ -1280,10 +1694,9 @@ if (isset($_GET['edit'])) {
                     <div class="form-group">
                         <label class="form-label">Detailed Package Description</label>
                         <textarea name="package_details" class="form-textarea" placeholder="Detailed description of what the package includes"><?php echo $edit_destination ? htmlspecialchars($edit_destination['package_details'] ?? '') : ''; ?></textarea>
-                        <div class="form-help">This will be shown on the destination details page</div>
                     </div>
                     
-                    <!-- Itinerary Builder Section -->
+                    <!-- Itinerary Builder -->
                     <div class="form-group">
                         <label class="form-label">Itinerary Builder *</label>
                         <div id="itineraryBuilder">
@@ -1331,20 +1744,17 @@ if (isset($_GET['edit'])) {
                         <button type="button" onclick="addItineraryDay()" style="background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; margin-top: 10px;">
                             <i class="fas fa-plus"></i> Add Day
                         </button>
-                        <div class="form-help">Create day-by-day itinerary for the destination page</div>
                     </div>
                     
                     <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label">Included Services</label>
                             <textarea name="included_services" class="form-textarea" placeholder="Services included in package (one per line)"><?php echo $edit_destination ? htmlspecialchars($edit_destination['included_services'] ?? '') : ''; ?></textarea>
-                            <div class="form-help">One service per line</div>
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label">Not Included</label>
                             <textarea name="not_included" class="form-textarea" placeholder="Services not included (one per line)"><?php echo $edit_destination ? htmlspecialchars($edit_destination['not_included'] ?? '') : ''; ?></textarea>
-                            <div class="form-help">One item per line</div>
                         </div>
                     </div>
                     
@@ -1364,17 +1774,15 @@ if (isset($_GET['edit'])) {
                         <div class="form-group">
                             <label class="form-label">Page Link</label>
                             <input type="text" name="page_link" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['page_link'] ?? '') : ''; ?>" placeholder="dynamic-destination.php?id=ID">
-                            <div class="form-help">Link to detailed page (leave empty for auto-generated)</div>
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label">Image URL</label>
                             <input type="text" name="image_url" class="form-input" value="<?php echo $edit_destination ? htmlspecialchars($edit_destination['image_url'] ?? '') : ''; ?>">
-                            <div class="form-help">Or upload image below</div>
                         </div>
                     </div>
                     
-                    <!-- Image Upload Section -->
+                    <!-- Image Upload -->
                     <div class="form-group">
                         <label class="form-label">Upload Image</label>
                         <div class="image-upload-container">
@@ -1383,7 +1791,6 @@ if (isset($_GET['edit'])) {
                                 <i class="fas fa-cloud-upload-alt"></i> Choose Image
                             </label>
                             
-                            <!-- Image preview -->
                             <div class="image-preview" id="imagePreview">
                                 <?php if ($edit_destination && !empty($edit_destination['image_url'])): ?>
                                     <img src="<?php echo htmlspecialchars($edit_destination['image_url']); ?>" alt="Current Image" id="previewImage">
@@ -1394,7 +1801,7 @@ if (isset($_GET['edit'])) {
                                     </div>
                                 <?php endif; ?>
                             </div>
-                            <div class="image-info">
+                            <div class="image-info" style="font-size: 0.85rem; color: var(--text-light); margin-top: 5px;">
                                 <i class="fas fa-info-circle"></i> Supported: JPG, PNG, GIF, WebP | Max: 5MB
                             </div>
                         </div>
@@ -1436,102 +1843,156 @@ if (isset($_GET['edit'])) {
             <!-- Destinations List -->
             <div class="table-container">
                 <div class="table-header">
-                    <h3>All Destinations</h3>
+                    <h3><i class="fas fa-map-marked-alt"></i> All Destinations</h3>
                     <div style="background: rgba(106, 17, 203, 0.1); color: var(--primary); padding: 8px 16px; border-radius: 20px; font-weight: 600;">
                         <?php echo isset($data['destinations']) ? mysqli_num_rows($data['destinations']) : 0; ?> destinations
                     </div>
                 </div>
                 
                 <?php if (isset($data['destinations']) && mysqli_num_rows($data['destinations']) > 0): ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Image</th>
-                            <th>Destination</th>
-                            <th>Description</th>
-                            <th>Price</th>
-                            <th>Duration</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while ($row = mysqli_fetch_assoc($data['destinations'])): ?>
-                        <tr>
-                            <td>#<?php echo $row['id']; ?></td>
-                            <td>
-                                <?php if (!empty($row['image_url'])): ?>
-                                    <?php if (filter_var($row['image_url'], FILTER_VALIDATE_URL)): ?>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Image</th>
+                                <th>Destination</th>
+                                <th>Description</th>
+                                <th>Price</th>
+                                <th>Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($row = mysqli_fetch_assoc($data['destinations'])): ?>
+                            <tr>
+                                <td>#<?php echo $row['id']; ?></td>
+                                <td>
+                                    <?php if (!empty($row['image_url'])): ?>
                                         <img src="<?php echo htmlspecialchars($row['image_url']); ?>" alt="<?php echo htmlspecialchars($row['name']); ?>" style="width: 80px; height: 60px; object-fit: cover; border-radius: 8px;">
                                     <?php else: ?>
-                                        <img src="<?php echo htmlspecialchars($row['image_url']); ?>" alt="<?php echo htmlspecialchars($row['name']); ?>" style="width: 80px; height: 60px; object-fit: cover; border-radius: 8px;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 60%22><rect width=%2280%22 height=%2260%22 fill=%22%234d4d4d%22/><text x=%2240%22 y=%2230%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22 font-size=%2210%22><?php echo urlencode(substr($row['name'], 0, 10)); ?></text></svg>'">
+                                        <div style="width: 80px; height: 60px; background: linear-gradient(135deg, #6a11cb, #2575fc); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.9rem; font-weight: bold;">
+                                            <?php echo substr($row['name'], 0, 3); ?>
+                                        </div>
                                     <?php endif; ?>
-                                <?php else: ?>
-                                    <div style="width: 80px; height: 60px; background: linear-gradient(135deg, #004d4d, #007272); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.9rem; font-weight: bold;">
-                                        <?php echo substr($row['name'], 0, 3); ?>
+                                </td>
+                                <td>
+                                    <div style="font-weight: 600; color: var(--primary);"><?php echo htmlspecialchars($row['name']); ?></div>
+                                </td>
+                                <td>
+                                    <div style="max-width: 300px; font-size: 0.9rem;">
+                                        <?php echo htmlspecialchars(substr($row['description'], 0, 100)); ?>...
                                     </div>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <div style="font-weight: 600; color: var(--primary);"><?php echo htmlspecialchars($row['name']); ?></div>
-                                <div style="font-size: 0.85rem; color: var(--text-light);">
-                                    <?php echo !empty($row['page_link']) ? htmlspecialchars($row['page_link']) : 'dynamic-destination.php?id=' . $row['id']; ?>
-                                </div>
-                            </td>
-                            <td>
-                                <div style="max-width: 300px; font-size: 0.9rem;">
-                                    <?php echo htmlspecialchars(substr($row['description'], 0, 100)); ?>
-                                    <?php echo strlen($row['description']) > 100 ? '...' : ''; ?>
-                                </div>
-                            </td>
-                            <td><strong style="color: var(--primary);"><?php echo htmlspecialchars($row['price']); ?></strong></td>
-                            <td><?php echo htmlspecialchars($row['duration'] ?? 'N/A'); ?></td>
-                            <td><?php echo date('d M Y', strtotime($row['created_at'])); ?></td>
-                            <td>
-                                <div style="display: flex; gap: 10px;">
-                                    <a href="?page=destinations&edit=<?php echo $row['id']; ?>" class="btn btn-warning">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <form method="POST">
-                                        <input type="hidden" name="destination_id" value="<?php echo $row['id']; ?>">
-                                        <input type="hidden" name="action" value="delete_destination">
-                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Delete destination \"<?php echo addslashes($row['name']); ?>\"?')">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                                </td>
+                                <td><strong><?php echo htmlspecialchars($row['price']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($row['duration'] ?? 'N/A'); ?></td>
+                                <td>
+                                    <div style="display: flex; gap: 10px;">
+                                        <a href="?page=destinations&edit=<?php echo $row['id']; ?>" class="btn btn-sm btn-warning">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                        <form method="POST">
+                                            <input type="hidden" name="destination_id" value="<?php echo $row['id']; ?>">
+                                            <input type="hidden" name="action" value="delete_destination">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete destination \"<?php echo addslashes($row['name']); ?>\"?')">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <?php else: ?>
-                <div style="text-align: center; padding: 60px 40px; color: var(--text-light);">
-                    <i class="fas fa-map-marked-alt" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.3;"></i>
+                <div class="empty">
+                    <i class="fas fa-map-marked-alt empty-icon"></i>
                     <h3>No Destinations Found</h3>
                     <p><?php echo !empty($search) ? 'No destinations match your search.' : 'No destinations added yet.'; ?></p>
                 </div>
                 <?php endif; ?>
             </div>
-        <?php endif; ?>
-    </div>
 
-    <!-- Booking Details Modal -->
-    <div class="modal-overlay" id="bookingModal" onclick="if(event.target.id=='bookingModal')closeModal()">
-        <div class="modal-content">
-            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="color: var(--primary);">Booking Details</h3>
-                <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; color: var(--text-light); cursor: pointer;">&times;</button>
+        <!-- NOTIFICATIONS PAGE -->
+        <?php elseif ($page == 'notifications'): ?>
+            <div class="notifications-container">
+                <div class="table-header">
+                    <h3 style="margin: 0; color: var(--text-dark);">
+                        <i class="fas fa-bell"></i> All Notifications
+                    </h3>
+                    <span style="background: rgba(106, 17, 203, 0.1); color: var(--primary); padding: 8px 16px; border-radius: 20px; font-weight: 600;">
+                        <?php echo mysqli_num_rows($all_notifications); ?> notifications
+                    </span>
+                </div>
+                
+                <?php if (mysqli_num_rows($all_notifications) > 0): ?>
+                <div class="notifications-list">
+                    <?php 
+                    $current_date = '';
+                    mysqli_data_seek($all_notifications, 0);
+                    while ($notif = mysqli_fetch_assoc($all_notifications)): 
+                        $notif_date = date('Y-m-d', strtotime($notif['created_at']));
+                        $display_date = date('F d, Y', strtotime($notif['created_at']));
+                        
+                        // Get icon based on type
+                        $icon = 'fa-bell';
+                        $bg_color = '#6a11cb';
+                        
+                        switch($notif['type']) {
+                            case 'booking_created':
+                                $icon = 'fa-plus-circle';
+                                $bg_color = '#28a745';
+                                break;
+                            case 'booking_edited':
+                                $icon = 'fa-edit';
+                                $bg_color = '#ffc107';
+                                break;
+                            case 'booking_cancelled':
+                                $icon = 'fa-times-circle';
+                                $bg_color = '#dc3545';
+                                break;
+                            case 'booking_confirmed':
+                                $icon = 'fa-check-circle';
+                                $bg_color = '#17a2b8';
+                                break;
+                        }
+                        
+                        if ($current_date != $notif_date):
+                            $current_date = $notif_date;
+                    ?>
+                        <div class="notification-date-group">
+                            <i class="fas fa-calendar-alt"></i> <?php echo $display_date; ?>
+                        </div>
+                    <?php endif; ?>
+                        
+                        <div class="notification-item-full">
+                            <div class="notification-icon" style="background: <?php echo $bg_color; ?>;">
+                                <i class="fas <?php echo $icon; ?>"></i>
+                            </div>
+                            <div class="notification-content">
+                                <div class="notification-title"><?php echo htmlspecialchars($notif['title']); ?></div>
+                                <div class="notification-message"><?php echo htmlspecialchars($notif['message']); ?></div>
+                                <div class="notification-time">
+                                    <i class="fas fa-clock"></i> <?php echo date('h:i A', strtotime($notif['created_at'])); ?>
+                                    <?php if ($notif['related_id']): ?>
+                                        • <a href="?page=bookings&search=<?php echo $notif['related_id']; ?>" style="color: var(--primary); text-decoration: none;">View Booking #<?php echo $notif['related_id']; ?></a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                </div>
+                <?php else: ?>
+                <div class="empty">
+                    <i class="fas fa-bell-slash empty-icon"></i>
+                    <h3 style="color: var(--text-dark); margin-bottom: 10px;">No Notifications</h3>
+                    <p style="margin-bottom: 20px; font-size: 1.1rem;">You don't have any notifications yet.</p>
+                    <p style="color: var(--text-light);">When users book or edit bookings, you'll see notifications here.</p>
+                </div>
+                <?php endif; ?>
             </div>
-            <div id="bookingDetailsContent"></div>
-            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-                <button class="btn btn-primary" onclick="printBookingDetails()">
-                    <i class="fas fa-print"></i> Print
-                </button>
-            </div>
-        </div>
+        <?php endif; ?>
     </div>
 
     <script>
@@ -1564,7 +2025,7 @@ if (isset($_GET['edit'])) {
             builder.appendChild(dayDiv);
         }
         
-        // Image preview functions
+        // Image preview
         function previewImage(input) {
             const preview = document.getElementById('imagePreview');
             const placeholder = document.getElementById('previewPlaceholder');
@@ -1589,57 +2050,98 @@ if (isset($_GET['edit'])) {
             }
         }
         
-        function updateImagePreview(url) {
-            const preview = document.getElementById('imagePreview');
-            const placeholder = document.getElementById('previewPlaceholder');
-            
-            if (url && url.trim() !== '') {
-                const img = document.getElementById('previewImage') || document.createElement('img');
-                img.id = 'previewImage';
-                img.src = url;
-                img.style.maxWidth = '100%';
-                img.style.maxHeight = '100%';
-                img.style.objectFit = 'cover';
-                img.onerror = function() {
-                    preview.innerHTML = '<div id="previewPlaceholder" style="color: #999; text-align: center;"><i class="fas fa-image" style="font-size: 3rem; margin-bottom: 10px;"></i><br><span>Invalid image URL</span></div>';
-                };
-                if (placeholder) placeholder.style.display = 'none';
-                preview.innerHTML = '';
-                preview.appendChild(img);
-            } else if (!document.getElementById('previewImage')) {
-                preview.innerHTML = '<div id="previewPlaceholder" style="color: #999; text-align: center;"><i class="fas fa-image" style="font-size: 3rem; margin-bottom: 10px;"></i><br><span>No image selected</span></div>';
-            }
+        // Notification System
+        function loadNotifications() {
+            fetch('?ajax=get_notifications')
+                .then(response => response.json())
+                .then(data => {
+                    const notificationList = document.getElementById('notificationList');
+                    const notificationBadge = document.getElementById('notificationBadge');
+                    
+                    if (data.notifications.length > 0) {
+                        notificationBadge.textContent = data.notifications.length;
+                        notificationBadge.style.display = 'block';
+                        
+                        let html = '';
+                        data.notifications.forEach(notif => {
+                            html += `
+                                <div class="notification-item">
+                                    <div class="notification-icon" style="background: ${notif.bg_color};">
+                                        <i class="fas ${notif.icon}"></i>
+                                    </div>
+                                    <div class="notification-content">
+                                        <div class="notification-title">${notif.title}</div>
+                                        <div class="notification-message">${notif.message}</div>
+                                        <div class="notification-time">${notif.time_ago}</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        notificationList.innerHTML = html;
+                    } else {
+                        notificationBadge.style.display = 'none';
+                        notificationList.innerHTML = `
+                            <div class="notification-empty">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>No notifications yet</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => console.error('Error loading notifications:', error));
         }
+        
+        // Toggle notification dropdown
+        document.getElementById('notificationBell').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('notificationDropdown');
+            dropdown.classList.toggle('active');
+            loadNotifications();
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('notificationDropdown');
+            const bell = document.getElementById('notificationBell');
+            
+            if (!bell.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+        
+        // Load notifications every 30 seconds
+        setInterval(loadNotifications, 30000);
+        
+        // Initial load
+        loadNotifications();
         
         // Form validation for destination form
         document.querySelector('form[enctype="multipart/form-data"]')?.addEventListener('submit', function(e) {
             const fileInput = document.getElementById('imageInput');
-            const imageUrl = document.querySelector('input[name="image_url"]').value;
+            const imageUrl = document.querySelector('input[name="image_url"]')?.value;
             const itineraryDays = document.querySelectorAll('input[name="itinerary_day[]"]').length;
             
-            // Check if itinerary has at least one day
             if (itineraryDays < 1) {
                 e.preventDefault();
                 alert('Please add at least one day to the itinerary.');
                 return false;
             }
             
-            // Check if at least one image source is provided
-            if (!fileInput.files[0] && !imageUrl.trim()) {
+            if (!fileInput.files[0] && !imageUrl?.trim()) {
                 e.preventDefault();
                 alert('Please either upload an image or provide an image URL.');
                 return false;
             }
             
-            // Validate file size if file is selected
             if (fileInput.files[0]) {
-                const maxSize = 5 * 1024 * 1024; // 5MB
+                const maxSize = 5 * 1024 * 1024;
                 if (fileInput.files[0].size > maxSize) {
                     e.preventDefault();
                     alert('Image file is too large. Maximum size is 5MB.');
                     return false;
                 }
-                // Validate file type
+                
                 const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
                 if (!allowedTypes.includes(fileInput.files[0].type)) {
                     e.preventDefault();
@@ -1650,144 +2152,6 @@ if (isset($_GET['edit'])) {
             
             return true;
         });
-        
-        function viewBookingDetails(booking) {
-            document.getElementById('bookingModal').style.display = 'flex';
-            const content = document.getElementById('bookingDetailsContent');
-            const startDate = new Date(booking.start_date).toLocaleDateString('en-US', {day:'numeric', month:'long', year:'numeric'});
-            const endDate = new Date(booking.end_date).toLocaleDateString('en-US', {day:'numeric', month:'long', year:'numeric'});
-            const bookedDate = new Date(booking.booking_date).toLocaleDateString('en-US', {day:'numeric', month:'long', year:'numeric'});
-            
-            content.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Booking ID</div>
-                        <div>#${booking.id}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Status</div>
-                        <div>
-                            <span class="status-badge status-${booking.status || 'pending'}">
-                                ● ${booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : 'Pending'}
-                            </span>
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Customer Name</div>
-                        <div>${booking.full_name}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Email</div>
-                        <div>${booking.email}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Phone</div>
-                        <div>${booking.phone}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Destination</div>
-                        <div>${booking.destination}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Package</div>
-                        <div><span class="info-badge package-badge">${booking.package || 'Basic Pilgrimage'}</span></div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Hotel Category</div>
-                        <div><span class="info-badge hotel-badge">${booking.hotel_category || 'Basic Hotel'}</span></div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Transport Type</div>
-                        <div><span class="info-badge transport-badge">${booking.transport_type || 'Bus'}</span></div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Travelers</div>
-                        <!-- FIXED: Changed from booking.num_travelers to booking.travelers -->
-                        <div><span class="info-badge traveler-badge">${booking.travelers || 1} persons</span></div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Travel Dates</div>
-                        <div>${startDate} to ${endDate}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Total Price</div>
-                        <div style="font-weight: 700; color: var(--primary);">₹${parseFloat(booking.price).toLocaleString('en-IN')}</div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Booked On</div>
-                        <div>${bookedDate}</div>
-                    </div>
-                    ${booking.notes ? `
-                    <div style="grid-column: 1 / -1;">
-                        <div style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Special Notes</div>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 8px;">${booking.notes}</div>
-                    </div>` : ''}
-                </div>`;
-        }
-        
-        function closeModal() { 
-            document.getElementById('bookingModal').style.display = 'none'; 
-        }
-        
-        function printBookingDetails() {
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Booking Details</title>
-                        <style>
-                            body {
-                                font-family: sans-serif;
-                                padding: 20px;
-                                line-height: 1.6;
-                            }
-                            h3 {
-                                color: #6a11cb;
-                                border-bottom: 2px solid #6a11cb;
-                                padding-bottom: 10px;
-                            }
-                            .booking-info {
-                                display: grid;
-                                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                                gap: 15px;
-                                margin-top: 20px;
-                            }
-                            .info-item {
-                                margin-bottom: 15px;
-                            }
-                            .label {
-                                font-weight: bold;
-                                color: #2d3748;
-                                margin-bottom: 5px;
-                            }
-                            .value {
-                                color: #718096;
-                            }
-                            .badge {
-                                display: inline-block;
-                                padding: 4px 10px;
-                                border-radius: 12px;
-                                font-size: 0.9rem;
-                                font-weight: 600;
-                            }
-                            @media print {
-                                body {
-                                    font-size: 12px;
-                                }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h3>Booking Details</h3>
-                        <div class="booking-info">
-                            ${document.getElementById('bookingDetailsContent').innerHTML.replace(/style="[^"]*"/g, '').replace(/class="[^"]*"/g, '').replace(/<span[^>]*>/g, '<span class="badge">').replace(/<\/span>/g, '</span>')}
-                        </div>
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.print();
-        }
         
         // Auto-remove alerts after 5 seconds
         setTimeout(() => { 

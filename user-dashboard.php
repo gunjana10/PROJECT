@@ -1,6 +1,7 @@
 <?php
 session_start();
 include("db.php");
+include("notification_helper.php");
 
 // Check login
 if (!isset($_SESSION['id']) || $_SESSION['role'] != 'user') {
@@ -11,7 +12,68 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] != 'user') {
 $user_id = $_SESSION['id'];
 $user = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM users WHERE id='$user_id'"));
 
-// Handle actions
+// Handle AJAX notification request
+if (isset($_GET['ajax']) && $_GET['ajax'] == 'get_notifications') {
+    header('Content-Type: application/json');
+    
+    $notifications = NotificationHelper::getRecent($conn, $user_id, 'user', 10);
+    $notifications_array = [];
+    
+    while ($notif = mysqli_fetch_assoc($notifications)) {
+        // Format time
+        $created = strtotime($notif['created_at']);
+        $now = time();
+        $diff = $now - $created;
+        
+        if ($diff < 60) {
+            $time_ago = "Just now";
+        } elseif ($diff < 3600) {
+            $minutes = floor($diff / 60);
+            $time_ago = $minutes . " min" . ($minutes > 1 ? "s" : "") . " ago";
+        } elseif ($diff < 86400) {
+            $hours = floor($diff / 3600);
+            $time_ago = $hours . " hour" . ($hours > 1 ? "s" : "") . " ago";
+        } elseif ($diff < 604800) {
+            $days = floor($diff / 86400);
+            $time_ago = $days . " day" . ($days > 1 ? "s" : "") . " ago";
+        } else {
+            $time_ago = date('M d', $created);
+        }
+        
+        // Get icon based on type
+        $icon = 'fa-bell';
+        $bg_color = '#006d6d';
+        
+        switch($notif['type']) {
+            case 'booking_confirmed':
+                $icon = 'fa-check-circle';
+                $bg_color = '#28a745';
+                break;
+            case 'booking_cancelled':
+                $icon = 'fa-times-circle';
+                $bg_color = '#dc3545';
+                break;
+        }
+        
+        $notifications_array[] = [
+            'id' => $notif['id'],
+            'title' => htmlspecialchars($notif['title']),
+            'message' => htmlspecialchars($notif['message']),
+            'time_ago' => $time_ago,
+            'icon' => $icon,
+            'bg_color' => $bg_color,
+            'related_id' => $notif['related_id'],
+            'created_at' => $notif['created_at']
+        ];
+    }
+    
+    echo json_encode([
+        'notifications' => $notifications_array
+    ]);
+    exit();
+}
+
+// Handle all POST actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['cancel_booking'])) {
         $booking_id = mysqli_real_escape_string($conn, $_POST['booking_id']);
@@ -19,13 +81,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if (mysqli_num_rows($check) > 0) {
             $booking = mysqli_fetch_assoc($check);
-            $hours_until = (strtotime($booking['start_date']) - time()) / 3600;
+            $status = strtolower(trim($booking['status']));
+            $start_date_timestamp = strtotime($booking['start_date']);
+            $current_timestamp = time();
+            $is_trip_completed = $start_date_timestamp < $current_timestamp;
             
-            if ($hours_until > 48 && in_array($booking['status'], ['pending', 'confirmed'])) {
-                mysqli_query($conn, "UPDATE bookings SET status='cancel' WHERE id='$booking_id'");
+            // Only allow cancellation for pending/confirmed bookings that are not completed
+            if (($status == 'pending' || $status == 'confirmed') && !$is_trip_completed) {
+                mysqli_query($conn, "UPDATE bookings SET status='cancelled' WHERE id='$booking_id'");
+                
+                // Create notification for user about cancellation
+                NotificationHelper::create(
+                    $conn,
+                    $user_id,
+                    'user',
+                    'booking_cancelled',
+                    'Booking Cancelled',
+                    "Your booking #$booking_id has been cancelled successfully.",
+                    $booking_id
+                );
+                
+                // Notify admins about cancellation
+                NotificationHelper::createForAdmins(
+                    $conn,
+                    'booking_cancelled',
+                    'Booking Cancelled by User',
+                    "User {$user['fullname']} cancelled booking #$booking_id",
+                    $booking_id
+                );
+                
                 $_SESSION['success'] = "✅ Booking #$booking_id cancelled successfully!";
             } else {
-                $_SESSION['error'] = $hours_until <= 48 ? "❌ Cannot cancel within 48 hours of trip start." : "❌ Cannot cancel this booking.";
+                $_SESSION['error'] = "❌ Cannot cancel this booking.";
             }
         }
         header("Location: user-dashboard.php?tab=bookings");
@@ -49,18 +136,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if (mysqli_num_rows($check) > 0) {
             $booking = mysqli_fetch_assoc($check);
-            $hours_until = (strtotime($booking['start_date']) - time()) / 3600;
+            $status = strtolower(trim($booking['status']));
+            $start_date_timestamp = strtotime($booking['start_date']);
+            $current_timestamp = time();
+            $is_trip_completed = $start_date_timestamp < $current_timestamp;
             
-            // Only allow editing if more than 24 hours before trip
-            if ($hours_until > 24 && in_array($booking['status'], ['pending', 'confirmed'])) {
+            // Only allow editing for pending/confirmed bookings that are not completed
+            if (($status == 'pending' || $status == 'confirmed') && !$is_trip_completed) {
                 // Recalculate price if travelers count changes
                 $new_price = $booking['price'];
                 if ($travelers != $booking['travelers']) {
-                    $base_price_per_person = 21480; // Example base price
+                    $base_price_per_person = 21480;
                     $new_price = $base_price_per_person * $travelers;
                 }
                 
-                // Update booking - FIXED: full_name instead of fullname
+                // Update booking
                 $update_query = "UPDATE bookings SET 
                     full_name='$fullname',
                     phone='$phone',
@@ -76,12 +166,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     WHERE id='$booking_id'";
                 
                 if (mysqli_query($conn, $update_query)) {
+                    // Notify admins about booking edit
+                    NotificationHelper::createForAdmins(
+                        $conn,
+                        'booking_edited',
+                        'Booking Updated',
+                        "User {$user['fullname']} updated booking #$booking_id",
+                        $booking_id
+                    );
+                    
                     $_SESSION['success'] = "✅ Booking #$booking_id updated successfully!";
                 } else {
                     $_SESSION['error'] = "❌ Error updating booking: " . mysqli_error($conn);
                 }
             } else {
-                $_SESSION['error'] = "❌ Cannot edit booking within 24 hours of trip start.";
+                $_SESSION['error'] = "❌ Cannot edit this booking.";
             }
         } else {
             $_SESSION['error'] = "❌ Booking not found!";
@@ -122,21 +221,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // Get stats for dashboard
 $total_bookings = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}'"));
-$confirmed = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND status='confirmed'"));
-$pending = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND status='pending'"));
-$cancelled = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND status='cancel'"));
-$total_spent_result = mysqli_query($conn, "SELECT COALESCE(SUM(price),0) as total FROM bookings WHERE email='{$user['email']}' AND status='confirmed'");
+$confirmed = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND LOWER(status)='confirmed'"));
+$pending = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND (LOWER(status)='pending' OR status='' OR status IS NULL)"));
+$cancelled = mysqli_num_rows(mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' AND LOWER(status)='cancelled'"));
+$total_spent_result = mysqli_query($conn, "SELECT COALESCE(SUM(price),0) as total FROM bookings WHERE email='{$user['email']}' AND LOWER(status)='confirmed'");
 $total_spent_row = mysqli_fetch_assoc($total_spent_result);
 $total_spent = $total_spent_row['total'];
 
 // Get all bookings for the user
 $bookings_query = mysqli_query($conn, "SELECT * FROM bookings WHERE email='{$user['email']}' ORDER BY booking_date DESC");
 
+// Get notifications for notification page
+$all_notifications = NotificationHelper::getAll($conn, $user_id, 'user', 50);
+
 // Get active tab
 $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'dashboard';
 $titles = [
     'dashboard' => ['Dashboard', 'Your travel summary and overview'],
     'bookings' => ['My Bookings', 'Manage and view all your bookings'],
+    'notifications' => ['Notifications', 'All your notifications'],
     'profile' => ['Profile Settings', 'Update your personal information'],
     'password' => ['Change Password', 'Update your account password']
 ];
@@ -218,6 +321,146 @@ $titles = [
             font-size: 1.2rem;
         }
         
+        /* Notification Bell */
+        .notification-bell {
+            position: relative;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        .bell-icon {
+            font-size: 1.5rem;
+            color: var(--primary);
+            transition: all 0.3s ease;
+        }
+        
+        .bell-icon:hover {
+            transform: scale(1.1);
+            color: var(--secondary);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .notification-dropdown {
+            position: absolute;
+            top: 40px;
+            right: -20px;
+            width: 350px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            border: 1px solid var(--border-color);
+        }
+        
+        .notification-dropdown.active {
+            display: block;
+        }
+        
+        .notification-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .notification-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+        
+        .view-all-link {
+            color: white;
+            text-decoration: none;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .view-all-link:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+        
+        .notification-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .notification-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .notification-item:hover {
+            background: rgba(0,109,109,0.05);
+        }
+        
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .notification-content {
+            flex: 1;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-dark);
+        }
+        
+        .notification-message {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+        
+        .notification-time {
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+        
+        .notification-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-light);
+        }
+        
+        .notification-empty i {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 15px;
+        }
+        
         .logout-btn { 
             background: var(--accent); 
             color: white; 
@@ -272,7 +515,7 @@ $titles = [
             border-radius: 10px; 
             margin-bottom: 8px; 
             transition: all 0.3s ease;
-            border-left: 4px solid transparent;
+            position: relative;
         }
         
         .nav-link:hover { 
@@ -284,13 +527,24 @@ $titles = [
             background: rgba(0,109,109,0.1); 
             color: var(--primary); 
             font-weight: 600;
-            border-left: 4px solid var(--primary);
         }
         
         .nav-link i { 
             width: 24px; 
             margin-right: 12px; 
             font-size: 1.1rem;
+        }
+        
+        .notification-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--danger);
+            border-radius: 50%;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
         }
         
         .main-content { 
@@ -318,24 +572,23 @@ $titles = [
             font-size: 1rem;
         }
         
-        /* Stats Cards */
+        /* Stats Cards - NO LINE DESIGN */
         .stats-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
             gap: 20px; 
             margin-bottom: 40px; 
         }
         
         .stat-card { 
             background: white; 
-            padding: 25px; 
+            padding: 20px 25px; 
             border-radius: 12px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
             display: flex; 
             align-items: center; 
             gap: 20px; 
             transition: all 0.3s ease;
-            border-top: 4px solid var(--primary);
         }
         
         .stat-card:hover {
@@ -344,24 +597,24 @@ $titles = [
         }
         
         .stat-icon { 
-            width: 60px; 
-            height: 60px; 
+            width: 50px; 
+            height: 50px; 
             border-radius: 12px; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            font-size: 1.5rem; 
+            font-size: 1.3rem; 
             color: white; 
         }
         
         .stat-value { 
-            font-size: 2rem; 
+            font-size: 1.8rem; 
             font-weight: 700; 
             line-height: 1;
         }
         
         .stat-label {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text-light);
             margin-top: 5px;
         }
@@ -406,9 +659,9 @@ $titles = [
         
         /* Status Badges */
         .badge { 
-            padding: 8px 16px; 
+            padding: 6px 12px; 
             border-radius: 20px; 
-            font-size: 0.85rem; 
+            font-size: 0.8rem; 
             font-weight: 600; 
             display: inline-flex; 
             align-items: center; 
@@ -425,9 +678,28 @@ $titles = [
             color: #0c5460; 
         }
         
-        .badge-cancel { 
+        .badge-cancelled { 
             background: #f8d7da; 
             color: #721c24; 
+        }
+        
+        /* Booking Detail Badges - NO ICONS */
+        .booking-detail-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .hotel-badge {
+            background: #e3f2fd;
+            color: #0d47a1;
+        }
+        
+        .transport-badge {
+            background: #e8f5e9;
+            color: #1b5e20;
         }
         
         /* Forms */
@@ -453,7 +725,7 @@ $titles = [
         
         .form-input { 
             width: 100%; 
-            padding: 14px 16px; 
+            padding: 12px 16px; 
             border: 2px solid var(--border-color); 
             border-radius: 8px; 
             font-size: 1rem; 
@@ -470,7 +742,7 @@ $titles = [
             background: var(--primary); 
             color: white; 
             border: none; 
-            padding: 14px 28px; 
+            padding: 12px 24px; 
             border-radius: 8px; 
             cursor: pointer; 
             font-weight: 600; 
@@ -479,6 +751,7 @@ $titles = [
             gap: 8px; 
             transition: all 0.3s ease;
             font-size: 1rem;
+            text-decoration: none;
         }
         
         .form-button:hover {
@@ -486,35 +759,25 @@ $titles = [
             transform: translateY(-2px);
         }
         
-        /* Action Buttons */
+        /* Action Buttons - NO ICONS */
         .action-buttons {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
         
-        .view-btn, .edit-btn, .cancel-btn {
+        .edit-btn, .cancel-btn {
             padding: 8px 16px;
             border-radius: 6px;
             border: none;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
             text-decoration: none;
             transition: all 0.3s ease;
-        }
-        
-        .view-btn {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .view-btn:hover {
-            background: #005a5a;
-            transform: translateY(-2px);
         }
         
         .edit-btn {
@@ -535,6 +798,23 @@ $titles = [
         .cancel-btn:hover {
             background: #e0355c;
             transform: translateY(-2px);
+        }
+        
+        /* Disabled Button Styles - NO TOOLTIPS */
+        .edit-btn:disabled, .cancel-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+            transform: none;
+        }
+        
+        .edit-btn:disabled:hover, .cancel-btn:disabled:hover {
+            transform: none;
+            background: var(--success);
+        }
+        
+        .cancel-btn:disabled:hover {
+            background: var(--danger);
         }
         
         /* Alerts */
@@ -592,6 +872,40 @@ $titles = [
             margin-bottom: 20px;
         }
         
+        /* Notification Page */
+        .notifications-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .notifications-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .notification-item-full {
+            padding: 20px 25px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .notification-item-full:hover {
+            background: rgba(0,109,109,0.05);
+        }
+        
+        .notification-date-group {
+            background: #f8fafc;
+            padding: 15px 25px;
+            font-weight: 600;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
         /* Modal Styles */
         .modal {
             display: none;
@@ -626,7 +940,7 @@ $titles = [
         }
         
         .modal-header {
-            padding: 25px 30px;
+            padding: 20px 30px;
             background: var(--primary);
             color: white;
             display: flex;
@@ -635,7 +949,7 @@ $titles = [
         }
         
         .modal-title {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             margin: 0;
             display: flex;
             align-items: center;
@@ -665,35 +979,6 @@ $titles = [
             padding: 30px;
             overflow-y: auto;
             flex: 1;
-        }
-        
-        /* Details Grid */
-        .detail-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .detail-item {
-            padding: 20px;
-            background: #f8fafc;
-            border-radius: 8px;
-            border-left: 4px solid var(--primary);
-        }
-        
-        .detail-label {
-            font-size: 0.9rem;
-            color: var(--text-light);
-            margin-bottom: 8px;
-            display: block;
-            font-weight: 600;
-        }
-        
-        .detail-value {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text-dark);
         }
         
         /* Edit Form Grid */
@@ -726,6 +1011,9 @@ $titles = [
                 max-width: 100%;
                 padding: 20px;
             }
+            .notification-dropdown {
+                right: -100px;
+            }
         }
         
         @media (max-width: 768px) {
@@ -737,13 +1025,20 @@ $titles = [
                 gap: 15px;
                 padding: 15px 20px;
             }
+            .user-info {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .notification-dropdown {
+                right: -150px;
+                width: 300px;
+            }
             .table-container {
                 overflow-x: auto;
             }
             table {
-                min-width: 800px;
+                min-width: 900px;
             }
-            .detail-grid,
             .form-grid {
                 grid-template-columns: 1fr;
             }
@@ -757,10 +1052,13 @@ $titles = [
                 flex-direction: column;
                 align-items: stretch;
             }
-            .view-btn,
             .edit-btn,
             .cancel-btn {
-                justify-content: center;
+                width: 100%;
+            }
+            .notification-dropdown {
+                right: -100px;
+                width: 280px;
             }
         }
     </style>
@@ -772,12 +1070,32 @@ $titles = [
             <i class="fas fa-plane"></i> TripNext
         </div>
         <div class="user-info">
+            <!-- Notification Bell -->
+            <div class="notification-bell" id="notificationBell">
+                <i class="fas fa-bell bell-icon"></i>
+                <span class="notification-badge" id="notificationBadge">0</span>
+                
+                <!-- Notification Dropdown -->
+                <div class="notification-dropdown" id="notificationDropdown">
+                    <div class="notification-header">
+                        <h3><i class="fas fa-bell"></i> Notifications</h3>
+                        <a href="?tab=notifications" class="view-all-link">View All</a>
+                    </div>
+                    <div class="notification-list" id="notificationList">
+                        <div class="notification-empty">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>No notifications yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div style="text-align: right;">
                 <div style="font-weight: 600; font-size: 1.1rem;"><?php echo htmlspecialchars($user['fullname']); ?></div>
                 <div style="font-size: 0.9rem; color: var(--text-light);"><?php echo htmlspecialchars($user['email']); ?></div>
             </div>
             <div class="avatar"><?php echo strtoupper(substr($user['fullname'], 0, 1)); ?></div>
-            <a href="index.html" class="logout-btn" style="background: var(--secondary);">
+            <a href="index.php" class="logout-btn" style="background: var(--secondary);">
                 <i class="fas fa-home"></i> Home
             </a>
             <a href="logout.php" class="logout-btn">
@@ -797,15 +1115,25 @@ $titles = [
             </div>
             
             <ul class="nav-menu">
-                <?php foreach ($titles as $tab => $title): ?>
+                <?php 
+                $nav_tabs = [
+                    'dashboard' => ['tachometer-alt', 'Dashboard'],
+                    'bookings' => ['calendar-check', 'My Bookings'],
+                    'notifications' => ['bell', 'Notifications'],
+                    'profile' => ['user-cog', 'Profile Settings'],
+                    'password' => ['key', 'Change Password']
+                ];
+                
+                foreach ($nav_tabs as $tab => $nav_item): 
+                    $has_notification_dot = ($tab == 'notifications' && mysqli_num_rows($all_notifications) > 0) ? true : false;
+                ?>
                 <li class="nav-item">
                     <a href="?tab=<?php echo $tab; ?>" class="nav-link <?php echo $active_tab == $tab ? 'active' : ''; ?>">
-                        <i class="fas fa-<?php 
-                            echo $tab == 'dashboard' ? 'tachometer-alt' : 
-                                ($tab == 'bookings' ? 'calendar-check' : 
-                                ($tab == 'profile' ? 'user-cog' : 'key')); 
-                        ?>"></i>
-                        <span><?php echo $title[0]; ?></span>
+                        <i class="fas fa-<?php echo $nav_item[0]; ?>"></i>
+                        <span><?php echo $nav_item[1]; ?></span>
+                        <?php if ($has_notification_dot && $active_tab != 'notifications'): ?>
+                            <span class="notification-dot" style="display: block;"></span>
+                        <?php endif; ?>
                     </a>
                 </li>
                 <?php endforeach; ?>
@@ -835,7 +1163,8 @@ $titles = [
                     <i class="fas fa-<?php 
                         echo $active_tab == 'dashboard' ? 'tachometer-alt' : 
                             ($active_tab == 'bookings' ? 'calendar-check' : 
-                            ($active_tab == 'profile' ? 'user-cog' : 'key')); 
+                            ($active_tab == 'notifications' ? 'bell' :
+                            ($active_tab == 'profile' ? 'user-cog' : 'key'))); 
                     ?>"></i>
                     <?php echo $titles[$active_tab][0]; ?>
                 </h1>
@@ -847,11 +1176,11 @@ $titles = [
             <div class="stats-grid">
                 <?php 
                 $stats = [
-                    ['Total Bookings', $total_bookings, 'fa-calendar-alt', 'var(--primary)', 'All your bookings'],
-                    ['Confirmed', $confirmed, 'fa-check-circle', '#28a745', 'Approved bookings'],
-                    ['Pending', $pending, 'fa-clock', '#ffc107', 'Awaiting confirmation'],
-                    ['Cancelled', $cancelled, 'fa-ban', 'var(--danger)', 'Cancelled trips'],
-                    ['Total Spent', '₹' . number_format($total_spent), 'fa-rupee-sign', '#9d4edd', 'Total amount spent']
+                    ['Total Bookings', $total_bookings, 'fa-calendar-alt', 'var(--primary)'],
+                    ['Confirmed', $confirmed, 'fa-check-circle', '#28a745'],
+                    ['Pending', $pending, 'fa-clock', '#ffc107'],
+                    ['Cancelled', $cancelled, 'fa-ban', 'var(--danger)'],
+                    ['Total Spent', 'Rs ' . number_format($total_spent), 'fa-rupee-sign', '#9d4edd']
                 ];
                 foreach ($stats as $stat): ?>
                 <div class="stat-card">
@@ -861,9 +1190,6 @@ $titles = [
                     <div>
                         <div class="stat-value"><?php echo $stat[1]; ?></div>
                         <div class="stat-label"><?php echo $stat[0]; ?></div>
-                        <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                            <i class="fas fa-info-circle"></i> <?php echo $stat[4]; ?>
-                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -887,6 +1213,9 @@ $titles = [
                         <tr>
                             <th>Booking ID</th>
                             <th>Destination</th>
+                            <th>Package</th>
+                            <th>Hotel</th>
+                            <th>Transport</th>
                             <th>Travel Dates</th>
                             <th>Travelers</th>
                             <th>Amount</th>
@@ -895,38 +1224,82 @@ $titles = [
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while ($b = mysqli_fetch_assoc($bookings_query) and $recent_count < 5): $recent_count++; ?>
+                        <?php while ($b = mysqli_fetch_assoc($bookings_query) and $recent_count < 5): $recent_count++; 
+                            $status = strtolower(trim($b['status']));
+                            if (empty($status)) $status = 'pending';
+                            
+                            // Check if trip is completed (start date is in the past)
+                            $start_date_timestamp = strtotime($b['start_date']);
+                            $current_timestamp = time();
+                            $is_trip_completed = $start_date_timestamp < $current_timestamp;
+                            
+                            // Determine if buttons should be enabled
+                            $can_edit_cancel = ($status == 'pending' || $status == 'confirmed') && !$is_trip_completed;
+                        ?>
                         <tr>
                             <td><strong>#<?php echo $b['id']; ?></strong></td>
                             <td>
-                                <div style="font-weight: 600;"><?php echo htmlspecialchars($b['destination']); ?></div>
-                                <div style="font-size: 0.85rem; color: var(--text-light);">
-                                    <?php echo htmlspecialchars($b['package']); ?>
-                                </div>
+                                <div style="font-weight: 600; color: var(--primary);"><?php echo htmlspecialchars($b['destination']); ?></div>
+                            </td>
+                            <td><?php echo htmlspecialchars($b['package']); ?></td>
+                            <td>
+                                <?php if (!empty($b['hotel'])): ?>
+                                    <span class="booking-detail-badge hotel-badge">
+                                        <?php echo htmlspecialchars($b['hotel']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color: var(--text-light);">Not selected</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($b['transport'])): ?>
+                                    <span class="booking-detail-badge transport-badge">
+                                        <?php echo htmlspecialchars($b['transport']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color: var(--text-light);">Not selected</span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php echo date('d M', strtotime($b['start_date'])); ?> - <?php echo date('d M Y', strtotime($b['end_date'])); ?>
-                                <?php 
-                                $hours_until = (strtotime($b['start_date']) - time()) / 3600;
-                                if ($hours_until < 0): ?>
-                                <div style="font-size: 0.8rem; color: var(--success);"><i class="fas fa-check-circle"></i> Completed</div>
-                                <?php elseif ($hours_until < 48 && $hours_until > 0): ?>
-                                <div style="font-size: 0.8rem; color: var(--warning);"><i class="fas fa-exclamation-circle"></i> Starts soon</div>
+                                <?php if ($is_trip_completed): ?>
+                                <div style="font-size: 0.8rem; color: var(--success);">Trip completed</div>
                                 <?php endif; ?>
                             </td>
                             <td><?php echo $b['travelers']; ?> person(s)</td>
-                            <td><strong style="color: var(--primary);">₹<?php echo number_format($b['price']); ?></strong></td>
+                            <td><strong style="color: var(--primary);">Rs <?php echo number_format($b['price']); ?></strong></td>
                             <td>
-                                <span class="badge badge-<?php echo $b['status']; ?>">
-                                    <i class="fas fa-circle" style="font-size: 0.6rem;"></i> 
-                                    <?php echo ucfirst($b['status']); ?>
+                                <span class="badge badge-<?php echo $status; ?>">
+                                    <?php echo ucfirst($status); ?>
                                 </span>
                             </td>
                             <td>
                                 <div class="action-buttons">
-                                    <button type="button" onclick="viewBookingDetails(<?php echo $b['id']; ?>)" class="view-btn">
-                                        <i class="fas fa-eye"></i> View
-                                    </button>
+                                    <?php if ($status == 'cancelled'): ?>
+                                        <span style="color: var(--danger); font-size: 0.85rem; padding: 8px 16px; background: #f8f9fa; border-radius: 6px;">
+                                            Cancelled
+                                        </span>
+                                    <?php else: ?>
+                                        <?php if ($can_edit_cancel): ?>
+                                            <button type="button" onclick="editBooking(<?php echo $b['id']; ?>)" class="edit-btn">
+                                                Edit
+                                            </button>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $b['id']; ?>">
+                                                <button type="submit" name="cancel_booking" class="cancel-btn" 
+                                                        onclick="return confirm('Are you sure you want to cancel booking #<?php echo $b['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        <?php else: ?>
+                                            <button type="button" class="edit-btn" disabled>
+                                                Edit
+                                            </button>
+                                            <button type="button" class="cancel-btn" disabled>
+                                                Cancel
+                                            </button>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -938,7 +1311,7 @@ $titles = [
                     <i class="fas fa-calendar-times empty-icon"></i>
                     <h3 style="color: var(--text-dark); margin-bottom: 10px;">No Bookings Yet</h3>
                     <p style="margin-bottom: 20px; font-size: 1.1rem;">Start planning your next adventure!</p>
-                    <a href="index.html" class="form-button" style="text-decoration: none; display: inline-flex;">
+                    <a href="index.php" class="form-button" style="text-decoration: none; display: inline-flex;">
                         <i class="fas fa-compass"></i> Explore Destinations
                     </a>
                 </div>
@@ -951,18 +1324,18 @@ $titles = [
             <div class="policy-note">
                 <i class="fas fa-exclamation-triangle" style="font-size: 1.2rem;"></i>
                 <div>
-                    <strong>Important Policies:</strong>
+                    <strong>Booking Policies:</strong>
                     <ul style="margin: 8px 0 0 20px;">
-                        <li>Cancellation allowed up to 48 hours before trip start for full refund</li>
-                        <li>Booking editing allowed up to 24 hours before trip start</li>
-                        <li>Changes to traveler count may affect the total price</li>
+                        <li>✅ You can edit or cancel <strong>PENDING</strong> and <strong>CONFIRMED</strong> bookings before trip starts</li>
+                        <li>❌ <strong>CANCELLED</strong> bookings cannot be edited or cancelled</li>
+                        <li>❌ <strong>COMPLETED</strong> trips cannot be edited or cancelled</li>
+                        <li>💰 Changes to traveler count will recalculate the total price</li>
                     </ul>
                 </div>
             </div>
             
             <div class="table-container">
                 <?php 
-                // Reset query pointer
                 mysqli_data_seek($bookings_query, 0);
                 $total = mysqli_num_rows($bookings_query);
                 
@@ -973,8 +1346,10 @@ $titles = [
                         <tr>
                             <th>Booking ID</th>
                             <th>Destination</th>
-                            <th>Travel Dates</th>
                             <th>Package</th>
+                            <th>Hotel</th>
+                            <th>Transport</th>
+                            <th>Travel Dates</th>
                             <th>Travelers</th>
                             <th>Amount</th>
                             <th>Status</th>
@@ -984,72 +1359,86 @@ $titles = [
                     </thead>
                     <tbody>
                         <?php while ($b = mysqli_fetch_assoc($bookings_query)): 
-                            $hours_until = (strtotime($b['start_date']) - time()) / 3600;
-                            $can_cancel = in_array($b['status'], ['pending', 'confirmed']) && $hours_until > 48;
-                            $can_edit = in_array($b['status'], ['pending', 'confirmed']) && $hours_until > 24;
+                            $status = strtolower(trim($b['status']));
+                            if (empty($status)) $status = 'pending';
+                            
+                            // Check if trip is completed (start date is in the past)
+                            $start_date_timestamp = strtotime($b['start_date']);
+                            $current_timestamp = time();
+                            $is_trip_completed = $start_date_timestamp < $current_timestamp;
+                            
+                            // Determine if buttons should be enabled
+                            $can_edit_cancel = ($status == 'pending' || $status == 'confirmed') && !$is_trip_completed;
                         ?>
                         <tr>
                             <td><strong>#<?php echo $b['id']; ?></strong></td>
                             <td>
                                 <div style="font-weight: 600; color: var(--primary);"><?php echo htmlspecialchars($b['destination']); ?></div>
-                                <div style="font-size: 0.85rem; color: var(--text-light);">
-                                    <i class="fas fa-hotel"></i> <?php echo htmlspecialchars($b['hotel']); ?> • 
-                                    <i class="fas fa-bus"></i> <?php echo htmlspecialchars($b['transport']); ?>
-                                </div>
                                 <?php if (!empty($b['special_requests'])): ?>
-                                <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 3px;">
-                                    <i class="fas fa-sticky-note"></i> Has special requests
+                                <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 3px;">
+                                    Has special requests
                                 </div>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo htmlspecialchars($b['package']); ?></td>
+                            <td>
+                                <?php if (!empty($b['hotel'])): ?>
+                                    <span class="booking-detail-badge hotel-badge">
+                                        <?php echo htmlspecialchars($b['hotel']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color: var(--text-light);">Not selected</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($b['transport'])): ?>
+                                    <span class="booking-detail-badge transport-badge">
+                                        <?php echo htmlspecialchars($b['transport']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color: var(--text-light);">Not selected</span>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <div style="font-weight: 600;"><?php echo date('d M', strtotime($b['start_date'])); ?> - <?php echo date('d M Y', strtotime($b['end_date'])); ?></div>
-                                <?php if ($hours_until < 0): ?>
-                                <div style="font-size: 0.8rem; color: var(--success);"><i class="fas fa-check-circle"></i> Trip completed</div>
-                                <?php elseif ($hours_until < 48 && $hours_until > 0): ?>
-                                <div style="font-size: 0.8rem; color: var(--warning);"><i class="fas fa-exclamation-circle"></i> Starts in <?php echo floor($hours_until); ?> hours</div>
-                                <?php elseif ($hours_until > 0): ?>
-                                <div style="font-size: 0.8rem; color: var(--text-light);"><i class="fas fa-clock"></i> Starts in <?php echo floor($hours_until/24); ?> days</div>
+                                <?php if ($is_trip_completed): ?>
+                                <div style="font-size: 0.8rem; color: var(--success);">Trip completed</div>
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo htmlspecialchars($b['package']); ?></td>
                             <td><?php echo $b['travelers']; ?> person(s)</td>
-                            <td><strong style="color: var(--primary);">₹<?php echo number_format($b['price']); ?></strong></td>
+                            <td><strong style="color: var(--primary);">Rs <?php echo number_format($b['price']); ?></strong></td>
                             <td>
-                                <span class="badge badge-<?php echo $b['status']; ?>">
-                                    <i class="fas fa-circle" style="font-size: 0.6rem;"></i> 
-                                    <?php echo ucfirst($b['status']); ?>
+                                <span class="badge badge-<?php echo $status; ?>">
+                                    <?php echo ucfirst($status); ?>
                                 </span>
                             </td>
                             <td><?php echo date('d M Y', strtotime($b['booking_date'])); ?></td>
                             <td>
                                 <div class="action-buttons">
-                                    <button type="button" onclick="viewBookingDetails(<?php echo $b['id']; ?>)" class="view-btn">
-                                        <i class="fas fa-eye"></i> View
-                                    </button>
-                                    
-                                    <?php if ($can_edit): ?>
-                                    <button type="button" onclick="editBooking(<?php echo $b['id']; ?>)" class="edit-btn">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($can_cancel): ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="booking_id" value="<?php echo $b['id']; ?>">
-                                        <button type="submit" name="cancel_booking" class="cancel-btn" 
-                                                onclick="return confirm('Are you sure you want to cancel booking #<?php echo $b['id']; ?>?')">
-                                            <i class="fas fa-times"></i> Cancel
-                                        </button>
-                                    </form>
-                                    <?php elseif ($b['status'] == 'cancel'): ?>
-                                    <span style="color: var(--danger); font-size: 0.9rem; padding: 8px 16px; background: #f8f9fa; border-radius: 6px;">
-                                        <i class="fas fa-ban"></i> Cancelled
-                                    </span>
-                                    <?php elseif ($hours_until <= 48 && $hours_until > 0): ?>
-                                    <span style="color: var(--text-light); font-size: 0.9rem; padding: 8px 16px; background: #f8f9fa; border-radius: 6px;">
-                                        <i class="fas fa-info-circle"></i> Non-refundable
-                                    </span>
+                                    <?php if ($status == 'cancelled'): ?>
+                                        <span style="color: var(--danger); font-size: 0.85rem; padding: 8px 16px; background: #f8f9fa; border-radius: 6px;">
+                                            Cancelled
+                                        </span>
+                                    <?php else: ?>
+                                        <?php if ($can_edit_cancel): ?>
+                                            <button type="button" onclick="editBooking(<?php echo $b['id']; ?>)" class="edit-btn">
+                                                Edit
+                                            </button>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="booking_id" value="<?php echo $b['id']; ?>">
+                                                <button type="submit" name="cancel_booking" class="cancel-btn" 
+                                                        onclick="return confirm('Are you sure you want to cancel booking #<?php echo $b['id']; ?>?')">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        <?php else: ?>
+                                            <button type="button" class="edit-btn" disabled>
+                                                Edit
+                                            </button>
+                                            <button type="button" class="cancel-btn" disabled>
+                                                Cancel
+                                            </button>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -1062,9 +1451,81 @@ $titles = [
                     <i class="fas fa-calendar-times empty-icon"></i>
                     <h3 style="color: var(--text-dark); margin-bottom: 10px;">No Bookings Found</h3>
                     <p style="margin-bottom: 20px; font-size: 1.1rem;">You haven't made any bookings yet.</p>
-                    <a href="index.html" class="form-button" style="text-decoration: none; display: inline-flex;">
+                    <a href="index.php" class="form-button" style="text-decoration: none; display: inline-flex;">
                         <i class="fas fa-compass"></i> Explore Destinations
                     </a>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Notifications Tab -->
+            <?php if ($active_tab == 'notifications'): ?>
+            <div class="notifications-container">
+                <div class="table-header">
+                    <h3 style="margin: 0; color: var(--text-dark);">
+                        <i class="fas fa-bell"></i> All Notifications
+                    </h3>
+                    <span style="background: rgba(0,109,109,0.1); color: var(--primary); padding: 8px 16px; border-radius: 20px; font-weight: 600;">
+                        <?php echo mysqli_num_rows($all_notifications); ?> notifications
+                    </span>
+                </div>
+                
+                <?php if (mysqli_num_rows($all_notifications) > 0): ?>
+                <div class="notifications-list">
+                    <?php 
+                    $current_date = '';
+                    mysqli_data_seek($all_notifications, 0);
+                    while ($notif = mysqli_fetch_assoc($all_notifications)): 
+                        $notif_date = date('Y-m-d', strtotime($notif['created_at']));
+                        $display_date = date('F d, Y', strtotime($notif['created_at']));
+                        
+                        // Get icon based on type
+                        $icon = 'fa-bell';
+                        $bg_color = '#006d6d';
+                        
+                        switch($notif['type']) {
+                            case 'booking_confirmed':
+                                $icon = 'fa-check-circle';
+                                $bg_color = '#28a745';
+                                break;
+                            case 'booking_cancelled':
+                                $icon = 'fa-times-circle';
+                                $bg_color = '#dc3545';
+                                break;
+                        }
+                        
+                        if ($current_date != $notif_date):
+                            $current_date = $notif_date;
+                    ?>
+                        <div class="notification-date-group">
+                            <i class="fas fa-calendar-alt"></i> <?php echo $display_date; ?>
+                        </div>
+                    <?php endif; ?>
+                        
+                        <div class="notification-item-full">
+                            <div class="notification-icon" style="background: <?php echo $bg_color; ?>;">
+                                <i class="fas <?php echo $icon; ?>"></i>
+                            </div>
+                            <div class="notification-content">
+                                <div class="notification-title"><?php echo htmlspecialchars($notif['title']); ?></div>
+                                <div class="notification-message"><?php echo htmlspecialchars($notif['message']); ?></div>
+                                <div class="notification-time">
+                                    <i class="fas fa-clock"></i> <?php echo date('h:i A', strtotime($notif['created_at'])); ?>
+                                    <?php if ($notif['related_id']): ?>
+                                        • <a href="?tab=bookings" style="color: var(--primary); text-decoration: none;">View Booking #<?php echo $notif['related_id']; ?></a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                </div>
+                <?php else: ?>
+                <div class="empty">
+                    <i class="fas fa-bell-slash empty-icon"></i>
+                    <h3 style="color: var(--text-dark); margin-bottom: 10px;">No Notifications</h3>
+                    <p style="margin-bottom: 20px; font-size: 1.1rem;">You don't have any notifications yet.</p>
+                    <p style="color: var(--text-light);">When your bookings are confirmed or cancelled, you'll see notifications here.</p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -1088,7 +1549,7 @@ $titles = [
                             <label class="form-label">Email Address</label>
                             <input type="email" class="form-input" value="<?php echo htmlspecialchars($user['email']); ?>" disabled style="background: #f8f9fa;">
                             <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 5px;">
-                                <i class="fas fa-info-circle"></i> Email cannot be changed
+                                Email cannot be changed
                             </div>
                         </div>
                     </div>
@@ -1098,7 +1559,7 @@ $titles = [
                         <input type="tel" name="phone" class="form-input" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" 
                                placeholder="Enter your phone number">
                         <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 5px;">
-                            <i class="fas fa-info-circle"></i> Used for booking confirmations and updates
+                            Used for booking confirmations and updates
                         </div>
                     </div>
                     
@@ -1132,7 +1593,7 @@ $titles = [
                             <label class="form-label">New Password *</label>
                             <input type="password" name="new_password" class="form-input" minlength="6" required>
                             <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 5px;">
-                                <i class="fas fa-info-circle"></i> Minimum 6 characters
+                                Minimum 6 characters
                             </div>
                         </div>
                         
@@ -1163,104 +1624,19 @@ $titles = [
         </div>
     </div>
     
-    <!-- Booking Details/Edit Modal -->
+    <!-- Booking Edit Modal -->
     <div id="bookingModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">
-                    <i class="fas fa-calendar-check"></i>
-                    <span id="modalTitle">Booking Details</span>
+                    <i class="fas fa-edit"></i>
+                    <span id="modalTitle">Edit Booking</span>
                 </h3>
                 <button class="close-modal" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- Details View -->
-                <div id="detailsView">
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Booking ID</span>
-                            <span class="detail-value" id="detailId">#123</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Status</span>
-                            <span class="detail-value">
-                                <span id="detailStatus" class="badge badge-confirmed">Confirmed</span>
-                            </span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Booked On</span>
-                            <span class="detail-value" id="detailBookedDate">12 Dec 2025</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Total Amount</span>
-                            <span class="detail-value" id="detailPrice">₹21,480</span>
-                        </div>
-                    </div>
-                    
-                    <h4 style="margin: 30px 0 20px 0; color: var(--primary); padding-bottom: 10px; border-bottom: 2px solid var(--border-color);">
-                        <i class="fas fa-info-circle"></i> Booking Information
-                    </h4>
-                    
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Full Name</span>
-                            <span class="detail-value" id="detailFullname">John Doe</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Email Address</span>
-                            <span class="detail-value" id="detailEmail">john@example.com</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Phone Number</span>
-                            <span class="detail-value" id="detailPhone">+977 98XXXXXXXX</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Destination</span>
-                            <span class="detail-value" id="detailDestination">Kedarnath Yatra</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Travel Start Date</span>
-                            <span class="detail-value" id="detailStartDate">25 Dec 2025</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Travel End Date</span>
-                            <span class="detail-value" id="detailEndDate">30 Dec 2025</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Number of Travelers</span>
-                            <span class="detail-value" id="detailTravelers">2 persons</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Package Selected</span>
-                            <span class="detail-value" id="detailPackage">Basic Pilgrimage (₹21,480)</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Hotel Category</span>
-                            <span class="detail-value" id="detailHotel">Basic Hotel</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Transport Type</span>
-                            <span class="detail-value" id="detailTransport">Bus</span>
-                        </div>
-                    </div>
-                    
-                    <div class="detail-item" style="margin-top: 20px;">
-                        <span class="detail-label">Special Requests & Notes</span>
-                        <span class="detail-value" id="detailRequests" style="font-weight: normal; white-space: pre-wrap;">None</span>
-                    </div>
-                    
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--border-color); display: flex; gap: 15px;">
-                        <button type="button" onclick="switchToEdit()" class="form-button" id="editButton" style="background: var(--success);">
-                            <i class="fas fa-edit"></i> Edit Booking
-                        </button>
-                        <button type="button" onclick="closeModal()" class="form-button" style="background: var(--text-light);">
-                            <i class="fas fa-times"></i> Close
-                        </button>
-                    </div>
-                </div>
-                
                 <!-- Edit Form -->
-                <div id="editForm" style="display: none;">
+                <div id="editForm">
                     <form id="editBookingForm" method="POST">
                         <input type="hidden" name="booking_id" id="editBookingId">
                         
@@ -1304,10 +1680,10 @@ $titles = [
                             <div class="form-group">
                                 <label class="form-label">Package *</label>
                                 <select name="package" id="editPackage" class="form-input" required>
-                                    <option value="Basic Pilgrimage (Rs.21,480)">Basic Pilgrimage (₹21,480)</option>
-                                    <option value="Standard Pilgrimage (Rs.32,480)">Standard Pilgrimage (₹32,480)</option>
-                                    <option value="Premium Pilgrimage (Rs.45,480)">Premium Pilgrimage (₹45,480)</option>
-                                    <option value="VIP Pilgrimage (Rs.65,480)">VIP Pilgrimage (₹65,480)</option>
+                                    <option value="Basic Pilgrimage (Rs.21,480)">Basic Pilgrimage (Rs 21,480)</option>
+                                    <option value="Standard Pilgrimage (Rs.32,480)">Standard Pilgrimage (Rs 32,480)</option>
+                                    <option value="Premium Pilgrimage (Rs.45,480)">Premium Pilgrimage (Rs 45,480)</option>
+                                    <option value="VIP Pilgrimage (Rs.65,480)">VIP Pilgrimage (Rs 65,480)</option>
                                 </select>
                             </div>
                             
@@ -1318,6 +1694,7 @@ $titles = [
                                     <option value="3 Star Hotel">3 Star Hotel</option>
                                     <option value="4 Star Hotel">4 Star Hotel</option>
                                     <option value="5 Star Hotel">5 Star Hotel</option>
+                                    <option value="Luxury Resort">Luxury Resort</option>
                                 </select>
                             </div>
                             
@@ -1326,8 +1703,8 @@ $titles = [
                                 <select name="transport" id="editTransport" class="form-input" required>
                                     <option value="Bus">Bus</option>
                                     <option value="Flight">Flight</option>
-                                    <option value="Train">Train</option>
-                                    <option value="Private Car">Private Car</option>
+                                    <option value="Private Vehicle">Private Vehicle</option>
+                                    <option value="Jeep">Jeep</option>
                                 </select>
                             </div>
                         </div>
@@ -1343,7 +1720,8 @@ $titles = [
                                 <strong>Important:</strong> 
                                 <ul style="margin: 8px 0 0 20px;">
                                     <li>Changing the number of travelers will recalculate the total price</li>
-                                    <li>Booking can only be edited more than 24 hours before trip start</li>
+                                    <li>You can edit pending and confirmed bookings before trip start</li>
+                                    <li>Completed trips cannot be edited</li>
                                     <li>Changes are subject to availability</li>
                                 </ul>
                             </div>
@@ -1353,7 +1731,7 @@ $titles = [
                             <button type="submit" name="edit_booking" class="form-button">
                                 <i class="fas fa-save"></i> Save Changes
                             </button>
-                            <button type="button" onclick="switchToView()" class="form-button" style="background: var(--text-light);">
+                            <button type="button" onclick="closeModal()" class="form-button" style="background: var(--text-light);">
                                 <i class="fas fa-times"></i> Cancel
                             </button>
                         </div>
@@ -1367,15 +1745,79 @@ $titles = [
         // Store booking data from PHP
         let bookingData = {
             <?php 
-            // Pass booking data to JavaScript
             mysqli_data_seek($bookings_query, 0);
             while ($booking = mysqli_fetch_assoc($bookings_query)): 
-                // Make sure we use full_name for the name field
-                $booking['fullname'] = $booking['full_name']; // Map full_name to fullname for JS
+                $booking['fullname'] = $booking['full_name'];
             ?>
             <?php echo $booking['id']; ?>: <?php echo json_encode($booking); ?>,
             <?php endwhile; ?>
         };
+        
+        // Notification System
+        function loadNotifications() {
+            fetch('?ajax=get_notifications')
+                .then(response => response.json())
+                .then(data => {
+                    const notificationList = document.getElementById('notificationList');
+                    const notificationBadge = document.getElementById('notificationBadge');
+                    
+                    if (data.notifications.length > 0) {
+                        notificationBadge.textContent = data.notifications.length;
+                        notificationBadge.style.display = 'block';
+                        
+                        let html = '';
+                        data.notifications.forEach(notif => {
+                            html += `
+                                <div class="notification-item">
+                                    <div class="notification-icon" style="background: ${notif.bg_color};">
+                                        <i class="fas ${notif.icon}"></i>
+                                    </div>
+                                    <div class="notification-content">
+                                        <div class="notification-title">${notif.title}</div>
+                                        <div class="notification-message">${notif.message}</div>
+                                        <div class="notification-time">${notif.time_ago}</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        notificationList.innerHTML = html;
+                    } else {
+                        notificationBadge.style.display = 'none';
+                        notificationList.innerHTML = `
+                            <div class="notification-empty">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>No notifications yet</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => console.error('Error loading notifications:', error));
+        }
+        
+        // Toggle notification dropdown
+        document.getElementById('notificationBell').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('notificationDropdown');
+            dropdown.classList.toggle('active');
+            loadNotifications();
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('notificationDropdown');
+            const bell = document.getElementById('notificationBell');
+            
+            if (!bell.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+        
+        // Load notifications every 30 seconds
+        setInterval(loadNotifications, 30000);
+        
+        // Initial load
+        loadNotifications();
         
         // Auto-hide alerts after 5 seconds
         setTimeout(() => {
@@ -1396,109 +1838,24 @@ $titles = [
         function closeModal() {
             document.getElementById('bookingModal').style.display = 'none';
             document.body.style.overflow = 'auto';
-            switchToView();
         }
         
-        function switchToEdit() {
-            document.getElementById('detailsView').style.display = 'none';
-            document.getElementById('editForm').style.display = 'block';
-            document.getElementById('modalTitle').textContent = 'Edit Booking';
-            
-            if (currentBookingData) {
-                populateEditForm(currentBookingData);
-            }
-        }
-        
-        function switchToView() {
-            document.getElementById('editForm').style.display = 'none';
-            document.getElementById('detailsView').style.display = 'block';
-            document.getElementById('modalTitle').textContent = 'Booking Details';
-        }
-        
-        // View booking details
-        function viewBookingDetails(bookingId) {
-            if (bookingData[bookingId]) {
-                const booking = bookingData[bookingId];
-                currentBookingData = booking;
-                populateDetailsView(booking);
-                updateEditButtonVisibility(booking);
-                openModal();
-            } else {
-                // Simple fetch as fallback
-                fetchBookingDetailsSimple(bookingId);
-            }
-        }
-        
-        // Direct edit booking
         function editBooking(bookingId) {
             if (bookingData[bookingId]) {
                 const booking = bookingData[bookingId];
                 currentBookingData = booking;
-                populateDetailsView(booking);
-                updateEditButtonVisibility(booking);
+                populateEditForm(booking);
                 openModal();
-                setTimeout(switchToEdit, 100);
             } else {
                 alert('Booking data not found. Please refresh the page.');
             }
         }
         
-        // Simple fetch function
-        function fetchBookingDetailsSimple(bookingId) {
-            // Create a simple form to get data
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = window.location.href;
-            form.style.display = 'none';
-            
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'fetch_booking';
-            input.value = bookingId;
-            
-            form.appendChild(input);
-            document.body.appendChild(form);
-            form.submit();
-        }
-        
-        // Populate details view
-        function populateDetailsView(booking) {
-            // Format dates
-            const formatDate = (dateString) => {
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
-            };
-            
-            // Set values
-            document.getElementById('detailId').textContent = `#${booking.id}`;
-            document.getElementById('detailStatus').textContent = booking.status;
-            document.getElementById('detailStatus').className = `badge badge-${booking.status}`;
-            document.getElementById('detailBookedDate').textContent = formatDate(booking.booking_date);
-            document.getElementById('detailPrice').textContent = `₹${parseInt(booking.price).toLocaleString('en-IN')}`;
-            document.getElementById('detailFullname').textContent = booking.full_name || booking.fullname || '<?php echo $user["fullname"]; ?>';
-            document.getElementById('detailEmail').textContent = booking.email;
-            document.getElementById('detailPhone').textContent = booking.phone || 'Not provided';
-            document.getElementById('detailDestination').textContent = booking.destination;
-            document.getElementById('detailStartDate').textContent = formatDate(booking.start_date);
-            document.getElementById('detailEndDate').textContent = formatDate(booking.end_date);
-            document.getElementById('detailTravelers').textContent = `${booking.travelers} person(s)`;
-            document.getElementById('detailPackage').textContent = booking.package;
-            document.getElementById('detailHotel').textContent = booking.hotel || 'Basic Hotel';
-            document.getElementById('detailTransport').textContent = booking.transport || 'Bus';
-            document.getElementById('detailRequests').textContent = booking.special_requests || 'None';
-        }
-        
-        // Populate edit form
         function populateEditForm(booking) {
             document.getElementById('editBookingId').value = booking.id;
             document.getElementById('editFullname').value = booking.full_name || booking.fullname || '';
             document.getElementById('editPhone').value = booking.phone || '';
             
-            // Format dates for input type="date"
             const formatDateForInput = (dateString) => {
                 const date = new Date(dateString);
                 return date.toISOString().split('T')[0];
@@ -1512,22 +1869,10 @@ $titles = [
             document.getElementById('editTransport').value = booking.transport || 'Bus';
             document.getElementById('editRequests').value = booking.special_requests || '';
             
-            // Set min date for start date (today)
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('editStartDate').min = today;
         }
         
-        // Update edit button visibility based on booking status and time
-        function updateEditButtonVisibility(booking) {
-            const editButton = document.getElementById('editButton');
-            if (editButton) {
-                const hoursUntil = (new Date(booking.start_date) - new Date()) / (1000 * 60 * 60);
-                const canEdit = ['pending', 'confirmed'].includes(booking.status) && hoursUntil > 24;
-                editButton.style.display = canEdit ? 'block' : 'none';
-            }
-        }
-        
-        // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('bookingModal');
             if (event.target == modal) {
@@ -1535,13 +1880,11 @@ $titles = [
             }
         }
         
-        // Form validation for edit form
         document.getElementById('editBookingForm')?.addEventListener('submit', function(e) {
             const startDate = new Date(document.getElementById('editStartDate').value);
             const endDate = new Date(document.getElementById('editEndDate').value);
             const today = new Date();
             
-            // Clear time for comparison
             today.setHours(0, 0, 0, 0);
             
             if (startDate < today) {
@@ -1556,17 +1899,9 @@ $titles = [
                 return false;
             }
             
-            const hoursUntil = (startDate - new Date()) / (1000 * 60 * 60);
-            if (hoursUntil <= 24) {
-                e.preventDefault();
-                alert('Cannot edit booking within 24 hours of trip start.');
-                return false;
-            }
-            
             return true;
         });
         
-        // Auto-hide alerts when clicked
         document.addEventListener('click', function(e) {
             if (e.target.closest('.alert')) {
                 const closeBtn = e.target.closest('.alert button');
@@ -1576,21 +1911,16 @@ $titles = [
             }
         });
         
-        // Check if we should open modal on page load (after form submission)
         document.addEventListener('DOMContentLoaded', function() {
-            // Check URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const editBookingId = urlParams.get('edit_id');
             
             if (editBookingId && bookingData[editBookingId]) {
                 const booking = bookingData[editBookingId];
                 currentBookingData = booking;
-                populateDetailsView(booking);
-                updateEditButtonVisibility(booking);
+                populateEditForm(booking);
                 openModal();
-                setTimeout(switchToEdit, 300);
                 
-                // Remove the parameter from URL without reloading
                 const newUrl = window.location.pathname + '?tab=bookings';
                 window.history.replaceState({}, '', newUrl);
             }
